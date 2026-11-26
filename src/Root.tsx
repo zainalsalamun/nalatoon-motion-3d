@@ -8,6 +8,7 @@ import { TamboraShort, TAMBORA_FRAMES } from "./videos/tambora/Tambora";
 import { BahasaJawaShort, BAHASA_JAWA_FRAMES } from "./videos/bahasajawa/BahasaJawa";
 import { PadiBebekShort, PADI_BEBEK_FRAMES } from "./videos/padibebek/PadiBebek";
 import { MinaPadiShort, MINA_PADI_FRAMES } from "./videos/minapadi/MinaPadi";
+import { MekariShort, MEKARI_FRAMES } from "./videos/mekari/Mekari";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -72,6 +73,14 @@ export const RemotionRoot: React.FC = () => {
         id="MinaPadiShort"
         component={MinaPadiShort}
         durationInFrames={MINA_PADI_FRAMES}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="MekariShort"
+        component={MekariShort}
+        durationInFrames={MEKARI_FRAMES}
         fps={30}
         width={1080}
         height={1920}

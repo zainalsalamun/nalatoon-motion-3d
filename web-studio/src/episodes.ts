@@ -7,6 +7,7 @@ import { TamboraShort, TAMBORA_FRAMES } from "@studio/videos/tambora/Tambora";
 import { BahasaJawaShort, BAHASA_JAWA_FRAMES } from "@studio/videos/bahasajawa/BahasaJawa";
 import { PadiBebekShort, PADI_BEBEK_FRAMES } from "@studio/videos/padibebek/PadiBebek";
 import { MinaPadiShort, MINA_PADI_FRAMES } from "@studio/videos/minapadi/MinaPadi";
+import { MekariShort, MEKARI_FRAMES } from "@studio/videos/mekari/Mekari";
 import {
   DEFAULT_MINA_PADI_BOARD,
   DEFAULT_PADI_BEBEK_BOARD,
@@ -35,6 +36,28 @@ export interface EpisodeDef {
 }
 
 export const EPISODES: EpisodeDef[] = [
+  {
+    id: "MekariShort",
+    name: "Ada Apa dengan Mekari?",
+    badge: "3D Editorial",
+    description: "7 stasiun 3D editorial terhubung 1 berkas payroll ilustratif, pembaruan resmi 26 Nov 09.00 WIB, dan logo alpha Naltech.",
+    component: MekariShort,
+    durationInFrames: MEKARI_FRAMES,
+    fps: 30,
+    supportsBoardEditor: false,
+    defaultSubtitle: "",
+    defaultScript:
+      "Mekari bermasalah saat periode gajian. Sebenarnya, apa yang terjadi?\nPada dua puluh lima November, pengguna melaporkan kesulitan mengakses layanan.\nDalam pembaruan resmi keesokan paginya, Mekari menyebut aktivitas tidak wajar yang diduga sebagai upaya serangan siber.",
+    bookmarks: [
+      { label: "25 Nov", frame: 45 },
+      { label: "Berita", frame: 200 },
+      { label: "Resmi", frame: 410 },
+      { label: "Isolasi", frame: 630 },
+      { label: "Infra Baru", frame: 880 },
+      { label: "Audit", frame: 1180 },
+      { label: "Outro", frame: Math.max(0, MEKARI_FRAMES - 35) },
+    ],
+  },
   {
     id: "MinaPadiShort",
     name: "Mina Padi Ikan Mas",

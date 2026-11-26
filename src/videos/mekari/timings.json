@@ -1,0 +1,237 @@
+{
+  "fps": 30,
+  "totalSec": 46.472,
+  "totalFrames": 1395,
+  "outroStartSec": 43.822,
+  "scenes": [
+    {
+      "id": 1,
+      "key": "hook_payday",
+      "sceneStartSec": 0.0,
+      "sceneEndSec": 4.174,
+      "sceneStartFrame": 0,
+      "sceneEndFrame": 125,
+      "voStartSec": 0.35,
+      "voEndSec": 4.014,
+      "spoken": "Mekari bermasalah saat periode gajian. Sebenarnya, apa yang terjadi?"
+    },
+    {
+      "id": 2,
+      "key": "timeline_news",
+      "sceneStartSec": 4.174,
+      "sceneEndSec": 10.482,
+      "sceneStartFrame": 125,
+      "sceneEndFrame": 314,
+      "voStartSec": 4.334,
+      "voEndSec": 10.322,
+      "spoken": "Pada dua puluh lima November, pengguna melaporkan kesulitan mengakses layanan. Media juga memberitakan gangguan pencairan gaji."
+    },
+    {
+      "id": 3,
+      "key": "official_notice",
+      "sceneStartSec": 10.482,
+      "sceneEndSec": 16.919,
+      "sceneStartFrame": 314,
+      "sceneEndFrame": 508,
+      "voStartSec": 10.642,
+      "voEndSec": 16.759,
+      "spoken": "Dalam pembaruan resmi keesokan paginya, Mekari menyebut aktivitas tidak wajar yang diduga sebagai upaya serangan siber."
+    },
+    {
+      "id": 4,
+      "key": "isolation_gate",
+      "sceneStartSec": 16.919,
+      "sceneEndSec": 23.124,
+      "sceneStartFrame": 508,
+      "sceneEndFrame": 694,
+      "voStartSec": 17.079,
+      "voEndSec": 22.964,
+      "spoken": "Sistem dinonaktifkan untuk mencegah pergerakan data. Jadi, layanan yang berhenti juga bagian dari langkah penanganan."
+    },
+    {
+      "id": 5,
+      "key": "new_infra",
+      "sceneStartSec": 23.124,
+      "sceneEndSec": 31.666,
+      "sceneStartFrame": 694,
+      "sceneEndFrame": 950,
+      "voStartSec": 23.284,
+      "voEndSec": 31.506,
+      "spoken": "Mekari membangun infrastruktur baru, terpisah dari sistem lama. Targetnya siap dalam dua puluh empat jam, lalu layanan dipulihkan bertahap setelah verifikasi keamanan."
+    },
+    {
+      "id": 6,
+      "key": "data_check",
+      "sceneStartSec": 31.666,
+      "sceneEndSec": 36.485,
+      "sceneStartFrame": 950,
+      "sceneEndFrame": 1095,
+      "voStartSec": 31.826,
+      "voEndSec": 36.325,
+      "spoken": "Apakah data bocor? Pengumuman resmi yang kami baca belum memastikan ada atau tidaknya kebocoran."
+    },
+    {
+      "id": 7,
+      "key": "safety_outro",
+      "sceneStartSec": 36.485,
+      "sceneEndSec": 46.472,
+      "sceneStartFrame": 1095,
+      "sceneEndFrame": 1394,
+      "voStartSec": 36.645,
+      "voEndSec": 43.672,
+      "spoken": "Untuk bantuan, gunakan kanal resmi. Jangan berikan kata sandi, kode O T P, atau data penggajian lewat pesan yang mengatasnamakan Mekari."
+    }
+  ],
+  "subtitles": [
+    {
+      "startSec": 0.35,
+      "endSec": 1.378,
+      "text": "Mekari bermasalah",
+      "accent": true
+    },
+    {
+      "startSec": 1.378,
+      "endSec": 2.471,
+      "text": "saat periode gajian.",
+      "accent": false
+    },
+    {
+      "startSec": 2.471,
+      "endSec": 4.014,
+      "text": "Sebenarnya, apa yang terjadi?",
+      "accent": true
+    },
+    {
+      "startSec": 4.334,
+      "endSec": 5.652,
+      "text": "Pada 25 November,",
+      "accent": true
+    },
+    {
+      "startSec": 5.652,
+      "endSec": 8.014,
+      "text": "pengguna kesulitan akses layanan.",
+      "accent": false
+    },
+    {
+      "startSec": 8.014,
+      "endSec": 9.168,
+      "text": "Media memberitakan",
+      "accent": false
+    },
+    {
+      "startSec": 9.168,
+      "endSec": 10.322,
+      "text": "gangguan pencairan gaji.",
+      "accent": true
+    },
+    {
+      "startSec": 10.642,
+      "endSec": 12.681,
+      "text": "Pembaruan resmi keesokan paginya:",
+      "accent": false
+    },
+    {
+      "startSec": 12.681,
+      "endSec": 14.66,
+      "text": "Mekari menyebut aktivitas tidak wajar",
+      "accent": false
+    },
+    {
+      "startSec": 14.66,
+      "endSec": 16.759,
+      "text": "diduga upaya serangan siber.",
+      "accent": true
+    },
+    {
+      "startSec": 17.079,
+      "endSec": 18.197,
+      "text": "Sistem dinonaktifkan",
+      "accent": true
+    },
+    {
+      "startSec": 18.197,
+      "endSec": 19.786,
+      "text": "untuk mencegah pergerakan data.",
+      "accent": false
+    },
+    {
+      "startSec": 19.786,
+      "endSec": 21.728,
+      "text": "Layanan berhenti juga bagian",
+      "accent": false
+    },
+    {
+      "startSec": 21.728,
+      "endSec": 22.964,
+      "text": "dari langkah penanganan.",
+      "accent": false
+    },
+    {
+      "startSec": 23.284,
+      "endSec": 25.137,
+      "text": "Mekari bangun infrastruktur baru,",
+      "accent": true
+    },
+    {
+      "startSec": 25.137,
+      "endSec": 26.41,
+      "text": "terpisah dari sistem lama.",
+      "accent": false
+    },
+    {
+      "startSec": 26.41,
+      "endSec": 28.379,
+      "text": "Target siap 24 jam,",
+      "accent": true
+    },
+    {
+      "startSec": 28.379,
+      "endSec": 31.506,
+      "text": "dipulihkan bertahap setelah verifikasi.",
+      "accent": false
+    },
+    {
+      "startSec": 31.826,
+      "endSec": 32.659,
+      "text": "Apakah data bocor?",
+      "accent": true
+    },
+    {
+      "startSec": 32.659,
+      "endSec": 34.992,
+      "text": "Pengumuman resmi belum memastikan",
+      "accent": false
+    },
+    {
+      "startSec": 34.992,
+      "endSec": 36.325,
+      "text": "ada atau tidaknya kebocoran.",
+      "accent": true
+    },
+    {
+      "startSec": 36.645,
+      "endSec": 38.481,
+      "text": "Untuk bantuan, gunakan kanal resmi.",
+      "accent": false
+    },
+    {
+      "startSec": 38.481,
+      "endSec": 39.874,
+      "text": "Jangan berikan kata sandi,",
+      "accent": true
+    },
+    {
+      "startSec": 39.874,
+      "endSec": 41.456,
+      "text": "kode OTP, atau data penggajian",
+      "accent": true
+    },
+    {
+      "startSec": 41.456,
+      "endSec": 43.672,
+      "text": "lewat pesan mengatasnamakan Mekari.",
+      "accent": false
+    }
+  ]
+}

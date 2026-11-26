@@ -418,6 +418,7 @@ function startRenderJob(payload) {
   const cfg = resolveEnvConfig();
   const compId = String(payload.compositionId || "MinaPadiShort");
   const allowedComps = new Set([
+    "MekariShort",
     "PadiBebekShort",
     "MinaPadiShort",
     "TamboraShort",

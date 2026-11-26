@@ -9,6 +9,7 @@
     "lint:slop": "node scripts/lint-antislop.mjs",
     "studio": "remotion studio",
     "typecheck": "tsc --noEmit && tsc -p web-studio/tsconfig.json --noEmit",
+    "render:mekari": "node scripts/render/render_short.mjs MekariShort",
     "render:padibebek": "node scripts/render/render_short.mjs PadiBebekShort",
     "render:minapadi": "node scripts/render/render_short.mjs MinaPadiShort",
     "render:tambora": "node scripts/render/render_short.mjs TamboraShort",
