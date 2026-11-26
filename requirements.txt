@@ -1,0 +1,10 @@
+# Audio & Local Apple Silicon TTS (optional, macOS Apple Silicon)
+mlx-audio
+soundfile
+numpy
+scipy
+
+# YouTube Data API v3 Auto-Uploader (optional)
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2

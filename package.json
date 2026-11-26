@@ -1,0 +1,33 @@
+{
+  "name": "nalatoon-motion-3d",
+  "version": "1.0.0",
+  "description": "3D Diorama vertical motion graphics studio (Remotion + Three.js + Qwen3-TTS MLX + YouTube Shorts Auto-Uploader)",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio",
+    "typecheck": "tsc --noEmit",
+    "render:padibebek": "zsh scripts/render/render_short.sh PadiBebekShort",
+    "render:minapadi": "zsh scripts/render/render_short.sh MinaPadiShort",
+    "render:tambora": "zsh scripts/render/render_short.sh TamboraShort",
+    "render:pulaurun": "zsh scripts/render/render_short.sh PulauRunShort",
+    "render:jawa": "zsh scripts/render/render_short.sh JawaShort",
+    "render:bahasajawa": "zsh scripts/render/render_short.sh BahasaJawaShort"
+  },
+  "dependencies": {
+    "@react-three/fiber": "8.17.10",
+    "@react-three/postprocessing": "2.16.3",
+    "@remotion/cli": "4.0.529",
+    "@remotion/three": "4.0.529",
+    "postprocessing": "6.36.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.529",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@types/three": "0.170.0",
+    "typescript": "5.7.3"
+  }
+}

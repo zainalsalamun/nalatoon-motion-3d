@@ -1,0 +1,38 @@
+# Dependencies & virtualenvs
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Render outputs, media & large binaries
+/out/
+/dist/
+/build/
+/checkpoints/
+/audio/
+/voice/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.wav
+*.mp3
+*.m4a
+*.pth
+*.safetensors
+*.onnx
+
+# Secrets, OAuth credentials & local state (NEVER commit!)
+.env
+.env.local
+client_secret.json
+*token*.json
+upload_history.json
+*.log
+
+# OS & editor files
+.DS_Store
+.vscode/
+.idea/
+*.swp
