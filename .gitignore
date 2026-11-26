@@ -30,6 +30,8 @@ client_secret.json
 *token*.json
 upload_history.json
 *.log
+web-studio/.studio_presets.json
+web-studio/dist/
 
 # OS & editor files
 .DS_Store

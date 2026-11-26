@@ -63,7 +63,28 @@ Edit `.env` sesuai ID channel dan folder lokal Anda (file `.env` dan folder `sec
 
 ---
 
-## 2. Preview Interaktif di Browser (Remotion Studio)
+## 2. Jalankan Nalatoon Studio Web UI (Rekomendasi — All-in-One)
+
+Selain lewat terminal, proyek ini dilengkapi **Studio Web App lokal (`web-studio/`)** dengan Live 3D Preview (`@remotion/player`), Editor Papan 3D real-time, Voiceover AI (`Qwen3-TTS`), 1-Click Render MP4, dan YouTube Shorts Scheduler:
+
+```bash
+npm run ui
+```
+
+Lalu buka **`http://127.0.0.1:5173`** di browser.
+
+![Nalatoon 3D Motion Studio Web UI](docs/screenshots/web_studio_ui.png)
+
+Fitur di dalam Web UI:
+- **Live 3D Stage (9:16)** — play, pause, scrub timeline, dan tombol lompat cepat antar-shot (*Hook*, *Konfrontasi*, *Papan 3D*, *Panen*).
+- **Tab Editor 3D** — ubah teks papan infografis 3D (*Judul, Subjudul, Kolom Kiri/Kanan*), exposure kamera, subtitle preview, dan watermark secara live.
+- **Tab Voice AI** — generate narasi Bahasa Indonesia lokal (mode *VoiceDesign 1.7B santai* atau *Voice Cloning*) dan langsung putar/unduh file `.wav`.
+- **Tab Render** — render MP4 dengan pilihan CRF/concurrency, optional muxing dengan audio voiceover, progress bar & log live, plus preview video hasil render.
+- **Tab YouTube** — verifikasi token OAuth, kirim hasil render ke folder antrean (`caption.txt` dibuat otomatis), dry-run jadwal, dan jadwalkan publish otomatis jam `19:00 WIB`.
+
+---
+
+## 3. Preview Interaktif di Remotion Studio (Opsional)
 
 Jalankan studio untuk melihat animasi 3D secara langsung, scrub timeline per frame, dan cek komposisi sebelum render:
 

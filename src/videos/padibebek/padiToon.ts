@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { BoardConfig, DEFAULT_PADI_BEBEK_BOARD } from "../../types/studioProps";
 
 const INK = "#201524";
 
@@ -353,7 +354,14 @@ export const drawPadiCharacter = (
 };
 
 // --- ONE Diegetic Wooden Signboard Planted Naturally in the Paddy (Shot 12 ONLY — ZERO floating UI cards!) ---
-export const makeDiegeticBoardTex = () => {
+export const makeDiegeticBoardTex = (overrides?: Partial<BoardConfig>) => {
+  const cfg: BoardConfig = {
+    ...DEFAULT_PADI_BEBEK_BOARD,
+    ...overrides,
+    leftItems: overrides?.leftItems ?? DEFAULT_PADI_BEBEK_BOARD.leftItems,
+    rightItems: overrides?.rightItems ?? DEFAULT_PADI_BEBEK_BOARD.rightItems,
+  };
+
   const cv = document.createElement("canvas");
   cv.width = 1024;
   cv.height = 680;
@@ -368,13 +376,13 @@ export const makeDiegeticBoardTex = () => {
 
   // Title header
   g.fillStyle = "#221626";
-  g.font = "900 56px -apple-system, BlinkMacSystemFont, sans-serif";
+  g.font = "900 54px -apple-system, BlinkMacSystemFont, sans-serif";
   g.textAlign = "center";
-  g.fillText("SISTEM PADI-BEBEK (AIGAMO)", 512, 106);
+  g.fillText(cfg.title, 512, 106, 920);
 
   g.fillStyle = "#6b543c";
   g.font = "800 32px -apple-system, BlinkMacSystemFont, sans-serif";
-  g.fillText("Perbandingan 1 Musim Tanam", 512, 152);
+  g.fillText(cfg.subtitle, 512, 152, 900);
 
   // Center vertical divider
   g.strokeStyle = "#c9b595";
@@ -384,41 +392,41 @@ export const makeDiegeticBoardTex = () => {
   g.lineTo(512, 625);
   g.stroke();
 
-  // Left Column: SAWAH BIASA
+  // Left Column
   g.fillStyle = "#c43828";
   g.beginPath();
   g.roundRect(68, 202, 400, 74, 18);
   g.fill();
   g.fillStyle = "#ffffff";
   g.font = "900 40px -apple-system, BlinkMacSystemFont, sans-serif";
-  g.fillText("SAWAH BIASA", 268, 253);
+  g.fillText(cfg.leftHeader, 268, 253, 370);
 
   g.fillStyle = "#2b1e24";
   g.font = "800 34px -apple-system, BlinkMacSystemFont, sans-serif";
-  g.fillText("- Semprot pestisida", 268, 344);
-  g.fillText("- Cabut rumput manual", 268, 418);
-  g.fillText("- Beli pupuk kimia", 268, 492);
+  g.fillText(cfg.leftItems[0] || "", 268, 344, 410);
+  g.fillText(cfg.leftItems[1] || "", 268, 418, 410);
+  g.fillText(cfg.leftItems[2] || "", 268, 492, 410);
   g.fillStyle = "#b53324";
   g.font = "900 36px -apple-system, BlinkMacSystemFont, sans-serif";
-  g.fillText("Biaya Tinggi", 268, 578);
+  g.fillText(cfg.leftFooter, 268, 578, 410);
 
-  // Right Column: SAWAH BEBEK
+  // Right Column
   g.fillStyle = "#1f8552";
   g.beginPath();
   g.roundRect(556, 202, 400, 74, 18);
   g.fill();
   g.fillStyle = "#ffffff";
   g.font = "900 40px -apple-system, BlinkMacSystemFont, sans-serif";
-  g.fillText("SAWAH BEBEK", 756, 253);
+  g.fillText(cfg.rightHeader, 756, 253, 370);
 
   g.fillStyle = "#1c3324";
   g.font = "800 34px -apple-system, BlinkMacSystemFont, sans-serif";
-  g.fillText("+ Keong & hama habis", 756, 344);
-  g.fillText("+ Pupuk alami gratis", 756, 418);
-  g.fillText("+ Bebek & telur bonus!", 756, 492);
+  g.fillText(cfg.rightItems[0] || "", 756, 344, 410);
+  g.fillText(cfg.rightItems[1] || "", 756, 418, 410);
+  g.fillText(cfg.rightItems[2] || "", 756, 492, 410);
   g.fillStyle = "#157a44";
   g.font = "900 36px -apple-system, BlinkMacSystemFont, sans-serif";
-  g.fillText("Panen Dobel!", 756, 578);
+  g.fillText(cfg.rightFooter, 756, 578, 410);
 
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;

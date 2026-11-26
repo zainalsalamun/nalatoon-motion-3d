@@ -4,6 +4,7 @@ import { CAFE_LIGHTS, CafeLight, dirFromAngles } from "../cafe/cafeLights";
 import { SHOTS, FPS, camAt, clamp01 } from "./story";
 import { makeMinaPadiBoardTex } from "./minaBoard";
 import { DioramaCharacter } from "../padibebek/dioramaRig";
+import type { BoardConfig } from "../../types/studioProps";
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -260,12 +261,13 @@ export class MinaPadiWorld {
   private fishBucket: THREE.Group;
   private leftFishBucket: THREE.Group;
   private signGroup: THREE.Group;
+  private boardMat: THREE.MeshBasicMaterial;
   private weedPatchLeft: THREE.Group;
 
   private budi: DioramaCharacter;
   private darto: DioramaCharacter;
 
-  constructor() {
+  constructor(board?: Partial<BoardConfig>) {
     // 1. Soft PBR Blender-Diorama Sunlight
     this.hemi = new THREE.HemisphereLight("#cbe3ff", "#7a8559", 1.35);
     this.root.add(this.hemi);
@@ -531,9 +533,10 @@ export class MinaPadiWorld {
     addBox(this.signGroup, 0.14, 1.55, 0.14, postWood, -1.05, 0.78, -0.14);
     addBox(this.signGroup, 0.14, 1.55, 0.14, postWood, 1.05, 0.78, -0.14);
     addBox(this.signGroup, 3.16, 2.08, 0.1, postWood, 0, 2.22, -0.06);
+    this.boardMat = new THREE.MeshBasicMaterial({ map: makeMinaPadiBoardTex(board), side: THREE.DoubleSide });
     const boardPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(3.08, 2.0),
-      new THREE.MeshBasicMaterial({ map: makeMinaPadiBoardTex(), side: THREE.DoubleSide }),
+      this.boardMat,
     );
     boardPlane.position.set(0, 2.22, 0.02);
     this.signGroup.add(boardPlane);
@@ -546,6 +549,13 @@ export class MinaPadiWorld {
     this.budi = new DioramaCharacter("budi");
     this.darto = new DioramaCharacter("darto");
     this.root.add(this.budi.root, this.darto.root);
+  }
+
+  setBoard(board?: Partial<BoardConfig>) {
+    const prev = this.boardMat.map;
+    this.boardMat.map = makeMinaPadiBoardTex(board);
+    this.boardMat.needsUpdate = true;
+    if (prev) prev.dispose();
   }
 
   private buildIndonesianVillage() {

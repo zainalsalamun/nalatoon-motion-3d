@@ -4,6 +4,7 @@ import { CAFE_LIGHTS, CafeLight, dirFromAngles } from "../cafe/cafeLights";
 import { SHOTS, FPS, camAt, clamp01 } from "./story";
 import { makeDiegeticBoardTex } from "./padiToon";
 import { DioramaCharacter } from "./dioramaRig";
+import type { BoardConfig } from "../../types/studioProps";
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -284,13 +285,14 @@ export class PadiBebekWorld {
   private sprayerTank: THREE.Group;
   private eggBasket: THREE.Group;
   private signGroup: THREE.Group;
+  private boardMat: THREE.MeshBasicMaterial;
   private weedPatchLeft: THREE.Group;
 
   // FULL 3D RIGGED CHARACTERS (NO 2D flat cards!)
   private budi: DioramaCharacter;
   private darto: DioramaCharacter;
 
-  constructor() {
+  constructor(board?: Partial<BoardConfig>) {
     // 1. Warm Soft Blender-Style Daylight Rig!
     this.hemi = new THREE.HemisphereLight("#cbe3ff", "#7a8559", 1.35);
     this.root.add(this.hemi);
@@ -511,9 +513,10 @@ export class PadiBebekWorld {
     addBox(this.signGroup, 0.14, 1.55, 0.14, postWood, -1.05, 0.78, -0.14);
     addBox(this.signGroup, 0.14, 1.55, 0.14, postWood, 1.05, 0.78, -0.14);
     addBox(this.signGroup, 3.16, 2.08, 0.1, postWood, 0, 2.22, -0.06);
+    this.boardMat = new THREE.MeshBasicMaterial({ map: makeDiegeticBoardTex(board), side: THREE.DoubleSide });
     const boardPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(3.08, 2.0),
-      new THREE.MeshBasicMaterial({ map: makeDiegeticBoardTex(), side: THREE.DoubleSide }),
+      this.boardMat,
     );
     boardPlane.position.set(0, 2.22, 0.02);
     this.signGroup.add(boardPlane);
@@ -523,6 +526,13 @@ export class PadiBebekWorld {
     this.budi = new DioramaCharacter("budi");
     this.darto = new DioramaCharacter("darto");
     this.root.add(this.budi.root, this.darto.root);
+  }
+
+  setBoard(board?: Partial<BoardConfig>) {
+    const prev = this.boardMat.map;
+    this.boardMat.map = makeDiegeticBoardTex(board);
+    this.boardMat.needsUpdate = true;
+    if (prev) prev.dispose();
   }
 
   private buildIndonesianVillage() {

@@ -1,6 +1,14 @@
 import * as THREE from "three";
+import { BoardConfig, DEFAULT_MINA_PADI_BOARD } from "../../types/studioProps";
 
-export const makeMinaPadiBoardTex = (): THREE.CanvasTexture => {
+export const makeMinaPadiBoardTex = (overrides?: Partial<BoardConfig>): THREE.CanvasTexture => {
+  const cfg: BoardConfig = {
+    ...DEFAULT_MINA_PADI_BOARD,
+    ...overrides,
+    leftItems: overrides?.leftItems ?? DEFAULT_MINA_PADI_BOARD.leftItems,
+    rightItems: overrides?.rightItems ?? DEFAULT_MINA_PADI_BOARD.rightItems,
+  };
+
   const c = document.createElement("canvas");
   c.width = 1200;
   c.height = 780;
@@ -14,12 +22,12 @@ export const makeMinaPadiBoardTex = (): THREE.CanvasTexture => {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#1a1324";
-  ctx.font = "900 58px 'Avenir Next', 'Helvetica Neue', sans-serif";
-  ctx.fillText("SISTEM MINA PADI", 600, 118);
+  ctx.font = "900 56px 'Avenir Next', 'Helvetica Neue', sans-serif";
+  ctx.fillText(cfg.title, 600, 118, 1080);
 
   ctx.fillStyle = "#6e4a2b";
   ctx.font = "700 32px 'Avenir Next', sans-serif";
-  ctx.fillText("Perbandingan 1 Musim Tanam", 600, 172);
+  ctx.fillText(cfg.subtitle, 600, 172, 1060);
 
   ctx.strokeStyle = "#d9c8aa";
   ctx.lineWidth = 6;
@@ -28,41 +36,41 @@ export const makeMinaPadiBoardTex = (): THREE.CanvasTexture => {
   ctx.lineTo(600, 696);
   ctx.stroke();
 
-  // Left: Sawah Biasa
+  // Left column
   ctx.fillStyle = "#d62d20";
   ctx.beginPath();
   ctx.roundRect(96, 232, 428, 76, 18);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 40px 'Avenir Next', sans-serif";
-  ctx.fillText("SAWAH BIASA", 310, 271);
+  ctx.fillText(cfg.leftHeader, 310, 271, 400);
 
   ctx.fillStyle = "#2b1d2e";
   ctx.font = "700 34px 'Avenir Next', sans-serif";
-  ctx.fillText("- Semprot hama rutin", 310, 384);
-  ctx.fillText("- Beli pupuk kimia", 310, 466);
-  ctx.fillText("- Air minim oksigen", 310, 548);
+  ctx.fillText(cfg.leftItems[0] || "", 310, 384, 460);
+  ctx.fillText(cfg.leftItems[1] || "", 310, 466, 460);
+  ctx.fillText(cfg.leftItems[2] || "", 310, 548, 460);
   ctx.fillStyle = "#d62d20";
   ctx.font = "900 38px 'Avenir Next', sans-serif";
-  ctx.fillText("Panen 1x Saja", 310, 642);
+  ctx.fillText(cfg.leftFooter, 310, 642, 460);
 
-  // Right: Mina Padi
+  // Right column
   ctx.fillStyle = "#0e8a4a";
   ctx.beginPath();
   ctx.roundRect(676, 232, 428, 76, 18);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 40px 'Avenir Next', sans-serif";
-  ctx.fillText("MINA PADI", 890, 271);
+  ctx.fillText(cfg.rightHeader, 890, 271, 400);
 
   ctx.fillStyle = "#163322";
   ctx.font = "700 34px 'Avenir Next', sans-serif";
-  ctx.fillText("+ Ikan basmi wereng", 890, 384);
-  ctx.fillText("+ Pupuk & oksigen alami", 890, 466);
-  ctx.fillText("+ Bonus ikan segar!", 890, 548);
+  ctx.fillText(cfg.rightItems[0] || "", 890, 384, 460);
+  ctx.fillText(cfg.rightItems[1] || "", 890, 466, 460);
+  ctx.fillText(cfg.rightItems[2] || "", 890, 548, 460);
   ctx.fillStyle = "#0e8a4a";
   ctx.font = "900 38px 'Avenir Next', sans-serif";
-  ctx.fillText("Panen Beras + Ikan!", 890, 642);
+  ctx.fillText(cfg.rightFooter, 890, 642, 460);
 
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
