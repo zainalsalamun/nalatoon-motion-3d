@@ -238,7 +238,17 @@ function listYoutubeQueue(queueDir) {
     return { queueDir, items: [], history: [] };
   }
   const skip = new Set(["Uploaded", "upload_history.json", "auto_upload.log", "CARA_PAKAI.txt", "client_secret.json", ".DS_Store"]);
-  const entries = fs.readdirSync(queueDir).filter((e) => !skip.has(e) && !e.startsWith(".")).sort();
+  let entries = [];
+  try {
+    entries = fs.readdirSync(queueDir).filter((e) => !skip.has(e) && !e.startsWith(".")).sort();
+  } catch (err) {
+    return {
+      queueDir,
+      items: [],
+      history: [],
+      warning: `Folder antrean tidak dapat dibaca di proses ini (${err.code || err.message}). Jalankan 'npm run ui' dari Terminal Mac untuk akses penuh Downloads.`,
+    };
+  }
   const items = [];
 
   for (const name of entries) {
