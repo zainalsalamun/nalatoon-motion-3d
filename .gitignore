@@ -31,6 +31,7 @@ client_secret.json
 upload_history.json
 *.log
 web-studio/.studio_presets.json
+web-studio/.studio_projects.json
 web-studio/dist/
 
 # OS & editor files

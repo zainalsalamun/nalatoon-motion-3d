@@ -97,13 +97,13 @@ Lalu buka **`http://127.0.0.1:5173`** di browser.
 
 ![Nalatoon 3D Motion Studio Web UI](docs/screenshots/web_studio_ui.png)
 
-Fitur di dalam Web UI:
-- **Live 3D Stage (9:16)** — play, pause, scrub timeline, dan tombol lompat cepat antar-shot (*Hook*, *Konfrontasi*, *Papan 3D*, *Panen*).
-- **Tab Editor 3D** — ubah teks papan infografis 3D (*Judul, Subjudul, Kolom Kiri/Kanan*), exposure kamera, subtitle preview, dan watermark secara live.
-- **Tab Voice AI** — generate narasi Bahasa Indonesia lokal (mode *VoiceDesign 1.7B santai* atau *Voice Cloning*) dan langsung putar/unduh file `.wav`.
-- **Tab Render** — render MP4 dengan pilihan CRF/concurrency, optional muxing dengan audio voiceover, progress bar & log live, plus preview video hasil render.
-- **Tab YouTube** — verifikasi token OAuth, kirim hasil render ke folder antrean (`caption.txt` dibuat otomatis), dry-run jadwal, dan jadwalkan publish otomatis jam `19:00 WIB`.
-- **Anti-AI-Slop Design System & Linter** — mengikuti kontrak [web-studio/DESIGN.md](web-studio/DESIGN.md) (*Tactile Film & Diorama Console*, tanpa neon glow / card-in-card / ikon `Sparkles` / font generik) dan dijaga otomatis lewat `npm run lint:slop`.
+Fitur & Alur Kerja 4 Langkah di dalam Web UI:
+- **`+ Buat Episode Baru` (Proyek Saya vs Template Bawaan)** — pilih salah satu dari 8 template dunia 3D dan simpan sebagai proyekmu sendiri di `PROYEK SAYA` tanpa menimpa contoh bawaan.
+- **Langkah 1: Naskah & Visual 3D** — tulis naskah cerita (1 baris = 1 subtitle otomatis ber-timing di monitor 3D), edit teks Papan Infografis 3D secara live, atur exposure kamera & watermark.
+- **Langkah 2: Suara AI** — naskah Langkah 1 otomatis tersinkron; pilih `Qwen3 1.7B (Mac)`, `Clone (Mac)`, atau `Edge TTS (All OS)` lalu pasang audio ke proyek.
+- **Langkah 3: Render MP4** — ringkasan pre-render (Template + Subtitle + Audio), pilih kualitas CRF & WebGL (`ANGLE` / `SwiftShader`), render Full HD 1080×1920 dengan progress bar live.
+- **Langkah 4: Upload YouTube** — kirim MP4 hasil Langkah 3 ke folder antrean (`caption.txt` otomatis) dan jadwalkan publish otomatis jam `19:00 WIB`.
+- **Hemat RAM (`LITE` + `SLEEP 3D`) & Anti-AI-Slop** — preview ringan default `LITE` (Render MP4 tetap 100% HD), tombol `SLEEP 3D` untuk 0 MB VRAM, mengikuti kontrak [web-studio/DESIGN.md](web-studio/DESIGN.md) dan dijaga otomatis lewat `npm run lint:slop`.
 
 ---
 

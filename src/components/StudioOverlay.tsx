@@ -1,17 +1,30 @@
 import React from "react";
-import { AbsoluteFill } from "remotion";
+import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import type { StudioSceneProps } from "../types/studioProps";
 
 export const StudioOverlay: React.FC<StudioSceneProps> = ({
   subtitleText,
   subtitleAccent = false,
+  subtitleCues,
   showWatermark = false,
   watermarkText = "Powered by Naltech",
 }) => {
-  const cleanSub = (subtitleText || "").trim();
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const sec = frame / Math.max(1, fps);
+
+  let activeText = (subtitleText || "").trim();
+  let activeAccent = subtitleAccent;
+
+  if (subtitleCues && subtitleCues.length > 0) {
+    const cue = subtitleCues.find((c) => sec >= c.startSec && sec < c.endSec);
+    activeText = cue ? cue.text.trim() : "";
+    activeAccent = Boolean(cue?.accent);
+  }
+
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
-      {cleanSub ? (
+      {activeText ? (
         <div
           style={{
             position: "absolute",
@@ -25,17 +38,17 @@ export const StudioOverlay: React.FC<StudioSceneProps> = ({
         >
           <span
             style={{
-              fontFamily: "'Avenir Next', 'Inter', -apple-system, sans-serif",
+              fontFamily: "'Avenir Next', 'Plus Jakarta Sans', -apple-system, sans-serif",
               fontWeight: 900,
-              fontSize: 64,
+              fontSize: 60,
               lineHeight: 1.15,
-              color: subtitleAccent ? "#ffd633" : "#ffffff",
+              color: activeAccent ? "#ffd633" : "#ffffff",
               WebkitTextStroke: "10px #121016",
               paintOrder: "stroke fill",
               textShadow: "0 8px 24px rgba(0,0,0,0.48)",
             }}
           >
-            {cleanSub}
+            {activeText}
           </span>
         </div>
       ) : null}
@@ -48,7 +61,7 @@ export const StudioOverlay: React.FC<StudioSceneProps> = ({
             right: 0,
             bottom: 72,
             textAlign: "center",
-            fontFamily: "'Avenir Next', 'Inter', -apple-system, sans-serif",
+            fontFamily: "'Avenir Next', 'Plus Jakarta Sans', -apple-system, sans-serif",
             fontWeight: 700,
             fontSize: 28,
             letterSpacing: "0.02em",

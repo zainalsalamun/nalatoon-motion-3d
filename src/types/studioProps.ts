@@ -9,11 +9,19 @@ export interface BoardConfig {
   rightFooter: string;
 }
 
+export interface SubtitleCue {
+  startSec: number;
+  endSec: number;
+  text: string;
+  accent?: boolean;
+}
+
 export interface StudioSceneProps {
   board?: Partial<BoardConfig>;
   exposure?: number;
   subtitleText?: string;
   subtitleAccent?: boolean;
+  subtitleCues?: SubtitleCue[];
   showWatermark?: boolean;
   watermarkText?: string;
   previewMode?: "lite" | "hd";

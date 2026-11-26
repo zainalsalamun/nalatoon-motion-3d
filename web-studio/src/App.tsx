@@ -1,27 +1,49 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
 import {
+  ArrowLeft,
+  ArrowRight,
   Check,
   Clapperboard,
+  Copy,
   Download,
   Film,
   Layers,
   Mic,
   Play,
+  Plus,
   Radio,
   RefreshCw,
   RotateCcw,
   Save,
   Send,
   SlidersHorizontal,
+  Trash2,
   UploadCloud,
   Volume2,
+  X,
   Youtube,
 } from "lucide-react";
 import { EPISODES, type EpisodeDef } from "./episodes";
-import type { BoardConfig, StudioSceneProps } from "@studio/types/studioProps";
+import type { BoardConfig, StudioSceneProps, SubtitleCue } from "@studio/types/studioProps";
 
-type TabId = "editor" | "voice" | "render" | "youtube";
+type StepId = 1 | 2 | 3 | 4;
+
+interface UserProject {
+  id: string;
+  name: string;
+  templateId: string;
+  scriptLines: string;
+  board?: BoardConfig;
+  exposure: number;
+  showWatermark: boolean;
+  watermarkText: string;
+  voiceFile: string;
+  renderFile: string;
+  ytTitle: string;
+  ytDescription: string;
+  updatedAt: string;
+}
 
 interface HealthResponse {
   ok: boolean;
@@ -71,56 +93,105 @@ interface QueueData {
 const DEFAULT_INSTRUCT =
   "A relaxed, confident 30-year-old Indonesian male explainer voice with a warm medium-low pitch. Speaks naturally like a smart friend explaining an interesting science fact in a YouTube video. Smooth conversational flow, steady brisk pace, gentle natural pitch inflection on questions, clean close-mic studio sound.";
 
+function buildTimedCues(scriptLines: string, totalSec: number): SubtitleCue[] {
+  const lines = scriptLines
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return [];
+  const weights = lines.map((l) => Math.max(3, l.split(/\s+/).length));
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  const startOffset = 0.4;
+  const usable = Math.max(2, totalSec - 1.2);
+  let cursor = startOffset;
+  return lines.map((raw, idx) => {
+    const accent = raw.startsWith("*");
+    const text = accent ? raw.slice(1).trim() : raw;
+    const dur = (weights[idx] / totalWeight) * usable;
+    const cue: SubtitleCue = {
+      startSec: Number(cursor.toFixed(2)),
+      endSec: Number((cursor + dur).toFixed(2)),
+      text,
+      accent,
+    };
+    cursor += dur;
+    return cue;
+  });
+}
+
+function makeProjectFromTemplate(ep: EpisodeDef, customName?: string, customScript?: string): UserProject {
+  const name = (customName || `${ep.name} (Baru)`).trim();
+  const defaultLines = (customScript || ep.defaultScript)
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("\n");
+  return {
+    id: `proj_${Date.now()}`,
+    name,
+    templateId: ep.id,
+    scriptLines: defaultLines,
+    board: ep.defaultBoard
+      ? {
+          ...ep.defaultBoard,
+          leftItems: [...ep.defaultBoard.leftItems] as [string, string, string],
+          rightItems: [...ep.defaultBoard.rightItems] as [string, string, string],
+        }
+      : undefined,
+    exposure: 1.06,
+    showWatermark: true,
+    watermarkText: "Powered by Naltech",
+    voiceFile: "",
+    renderFile: "",
+    ytTitle: name.slice(0, 95),
+    ytDescription: `${name}\n\nPowered by Naltech\n#shorts #nalatoon #edukasi #faktaunik`,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export const App: React.FC = () => {
   const playerRef = useRef<PlayerRef>(null);
 
-  const [selectedId, setSelectedId] = useState<string>(EPISODES[0].id);
-  const episode: EpisodeDef = useMemo(
-    () => EPISODES.find((e) => e.id === selectedId) || EPISODES[0],
-    [selectedId],
-  );
+  // User projects + built-in templates
+  const [projects, setProjects] = useState<UserProject[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(EPISODES[0].id);
 
-  const [activeTab, setActiveTab] = useState<TabId>("editor");
+  // New Episode Creator modal
+  const [showCreator, setShowCreator] = useState<boolean>(false);
+  const [newName, setNewName] = useState<string>("");
+  const [newTemplateId, setNewTemplateId] = useState<string>(EPISODES[0].id);
+  const [newScript, setNewScript] = useState<string>("");
+
+  // Guided 4-Step Pipeline
+  const [step, setStep] = useState<StepId>(1);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
 
-  const [boardByEp, setBoardByEp] = useState<Record<string, BoardConfig>>(() => {
-    const init: Record<string, BoardConfig> = {};
-    for (const ep of EPISODES) {
-      if (ep.defaultBoard) init[ep.id] = { ...ep.defaultBoard };
-    }
-    return init;
-  });
-  const [exposure, setExposure] = useState<number>(1.06);
-  const [subtitleText, setSubtitleText] = useState<string>(EPISODES[0].defaultSubtitle);
-  const [subtitleAccent, setSubtitleAccent] = useState<boolean>(false);
-  const [showWatermark, setShowWatermark] = useState<boolean>(true);
-  const [watermarkText, setWatermarkText] = useState<string>("Powered by Naltech");
+  // Monitor performance state
   const [previewMode, setPreviewMode] = useState<"lite" | "hd">("lite");
   const [viewportActive, setViewportActive] = useState<boolean>(true);
-  const [debouncedBoard, setDebouncedBoard] = useState<BoardConfig | undefined>(EPISODES[0].defaultBoard);
 
+  // Voice settings
   const [voiceMode, setVoiceMode] = useState<"design" | "clone" | "edge">("design");
-  const [voiceScript, setVoiceScript] = useState<string>(EPISODES[0].defaultScript);
   const [voiceInstruct, setVoiceInstruct] = useState<string>(DEFAULT_INSTRUCT);
   const [voiceTemp, setVoiceTemp] = useState<number>(0.85);
   const [edgeVoice, setEdgeVoice] = useState<string>("id-ID-ArdiNeural");
   const [voices, setVoices] = useState<MediaFile[]>([]);
-  const [selectedVoiceFile, setSelectedVoiceFile] = useState<string>("");
 
+  // Render settings
   const [renderCrf, setRenderCrf] = useState<number>(18);
   const [renderConcurrency, setRenderConcurrency] = useState<number>(2);
   const [renderGl, setRenderGl] = useState<"angle" | "swiftshader">("angle");
   const [frameRange, setFrameRange] = useState<string>("");
   const [renders, setRenders] = useState<MediaFile[]>([]);
 
+  // YouTube state
   const [queueData, setQueueData] = useState<QueueData | null>(null);
   const [ytHour, setYtHour] = useState<number>(19);
   const [ytMinute, setYtMinute] = useState<number>(0);
-  const [enqueueFile, setEnqueueFile] = useState<string>("");
-  const [enqueueTitle, setEnqueueTitle] = useState<string>("");
-  const [enqueueDesc, setEnqueueDesc] = useState<string>("");
 
+  // Active job
   const [activeJob, setActiveJob] = useState<StudioJob | null>(null);
 
   const showNotice = useCallback((kind: "ok" | "warn" | "error", text: string) => {
@@ -130,18 +201,34 @@ export const App: React.FC = () => {
     }, 4500);
   }, []);
 
+  const persistProjects = useCallback(async (nextList: UserProject[]) => {
+    try {
+      await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projects: nextList }),
+      });
+    } catch {
+      // ignore offline save error
+    }
+  }, []);
+
   const refreshLists = useCallback(async () => {
     try {
-      const [hRes, vRes, rRes, qRes] = await Promise.all([
+      const [hRes, vRes, rRes, qRes, pRes] = await Promise.all([
         fetch("/api/health").then((r) => r.json()),
         fetch("/api/voices").then((r) => r.json()),
         fetch("/api/renders").then((r) => r.json()),
         fetch("/api/youtube/queue").then((r) => r.json()),
+        fetch("/api/projects").then((r) => r.json()),
       ]);
       setHealth(hRes);
       setVoices(vRes.files || []);
       setRenders(rRes.files || []);
       setQueueData(qRes);
+      if (Array.isArray(pRes.projects)) {
+        setProjects(pRes.projects);
+      }
     } catch {
       showNotice("warn", "API studio lokal tidak merespons. Jalankan lewat: npm run ui");
     }
@@ -149,16 +236,51 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     refreshLists();
-    fetch("/api/presets")
-      .then((r) => r.json())
-      .then((saved) => {
-        if (saved && saved.boardByEp) {
-          setBoardByEp((prev) => ({ ...prev, ...saved.boardByEp }));
-        }
-      })
-      .catch(() => {});
   }, [refreshLists]);
 
+  // Active working project (or ephemeral template preview)
+  const activeProject = useMemo(
+    () => projects.find((p) => p.id === activeProjectId) || null,
+    [projects, activeProjectId],
+  );
+
+  const episode: EpisodeDef = useMemo(() => {
+    const tid = activeProject ? activeProject.templateId : selectedTemplateId;
+    return EPISODES.find((e) => e.id === tid) || EPISODES[0];
+  }, [activeProject, selectedTemplateId]);
+
+  // Ephemeral working state when previewing a built-in template before saving as a project
+  const [draftForTemplate, setDraftForTemplate] = useState<UserProject>(() =>
+    makeProjectFromTemplate(EPISODES[0], EPISODES[0].name),
+  );
+
+  const currentWork: UserProject = activeProject || draftForTemplate;
+
+  const updateCurrentWork = useCallback(
+    (updater: (prev: UserProject) => UserProject) => {
+      if (activeProject) {
+        setProjects((prevList) => {
+          const next = prevList.map((p) =>
+            p.id === activeProject.id ? { ...updater(p), updatedAt: new Date().toISOString() } : p,
+          );
+          persistProjects(next);
+          return next;
+        });
+      } else {
+        setDraftForTemplate((prev) => ({ ...updater(prev), updatedAt: new Date().toISOString() }));
+      }
+    },
+    [activeProject, persistProjects],
+  );
+
+  // Debounce 3D board texture rebuilds while typing
+  const [debouncedBoard, setDebouncedBoard] = useState<BoardConfig | undefined>(currentWork.board);
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedBoard(currentWork.board), 180);
+    return () => window.clearTimeout(t);
+  }, [currentWork.board]);
+
+  // Poll active background job
   useEffect(() => {
     if (!activeJob || activeJob.status !== "running") return;
     const timer = window.setInterval(async () => {
@@ -170,136 +292,161 @@ export const App: React.FC = () => {
         if (updated.status === "done") {
           showNotice("ok", `${updated.label} selesai.`);
           if (updated.type === "voice" && updated.outputFile) {
-            setSelectedVoiceFile(updated.outputFile);
+            updateCurrentWork((p) => ({ ...p, voiceFile: updated.outputFile! }));
           }
           if (updated.type === "render" && updated.outputFile) {
-            setEnqueueFile(updated.outputFile);
+            updateCurrentWork((p) => ({ ...p, renderFile: updated.outputFile! }));
           }
           refreshLists();
         } else if (updated.status === "failed") {
           showNotice("error", updated.error || `${updated.label} gagal.`);
         }
       } catch {
-        // retry on next tick
+        // retry next tick
       }
     }, 1200);
     return () => window.clearInterval(timer);
-  }, [activeJob, refreshLists, showNotice]);
+  }, [activeJob, refreshLists, showNotice, updateCurrentWork]);
 
-  const handleSelectEpisode = (id: string) => {
-    setSelectedId(id);
-    const ep = EPISODES.find((e) => e.id === id);
-    if (ep) {
-      setSubtitleText(ep.defaultSubtitle);
-      setVoiceScript(ep.defaultScript);
+  const handleSelectBuiltInTemplate = (id: string) => {
+    const ep = EPISODES.find((e) => e.id === id) || EPISODES[0];
+    setActiveProjectId(null);
+    setSelectedTemplateId(ep.id);
+    setDraftForTemplate(makeProjectFromTemplate(ep, ep.name));
+  };
+
+  const handleCreateProject = () => {
+    const ep = EPISODES.find((e) => e.id === newTemplateId) || EPISODES[0];
+    const created = makeProjectFromTemplate(ep, newName.trim() || `${ep.name} #${projects.length + 1}`, newScript);
+    const next = [created, ...projects];
+    setProjects(next);
+    persistProjects(next);
+    setActiveProjectId(created.id);
+    setShowCreator(false);
+    setNewName("");
+    setNewScript("");
+    setStep(1);
+    showNotice("ok", `Proyek baru dibuat: ${created.name}`);
+  };
+
+  const handleCloneTemplateToProject = () => {
+    const created: UserProject = {
+      ...currentWork,
+      id: `proj_${Date.now()}`,
+      name: activeProject ? `${currentWork.name} (Salinan)` : `${episode.name} #${projects.length + 1}`,
+      updatedAt: new Date().toISOString(),
+    };
+    const next = [created, ...projects];
+    setProjects(next);
+    persistProjects(next);
+    setActiveProjectId(created.id);
+    showNotice("ok", `Disimpan ke Proyek Saya: ${created.name}`);
+  };
+
+  const handleDeleteProject = (id: string) => {
+    const next = projects.filter((p) => p.id !== id);
+    setProjects(next);
+    persistProjects(next);
+    if (activeProjectId === id) {
+      setActiveProjectId(next[0]?.id || null);
     }
+    showNotice("ok", "Proyek dihapus.");
   };
 
-  const currentBoard: BoardConfig | undefined = boardByEp[episode.id] || episode.defaultBoard;
-
-  // Debounce 3D canvas texture rebuilds while typing to avoid allocating textures on every keystroke
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedBoard(currentBoard), 180);
-    return () => window.clearTimeout(t);
-  }, [currentBoard]);
-
-  const updateBoardField = <K extends keyof BoardConfig>(key: K, value: BoardConfig[K]) => {
-    if (!currentBoard) return;
-    setBoardByEp((prev) => ({
-      ...prev,
-      [episode.id]: {
-        ...currentBoard,
-        [key]: value,
-      },
-    }));
-  };
-
-  const updateBoardItem = (side: "leftItems" | "rightItems", idx: number, value: string) => {
-    if (!currentBoard) return;
-    const next: [string, string, string] = [...currentBoard[side]] as [string, string, string];
-    next[idx] = value;
-    updateBoardField(side, next);
-  };
+  const totalSec = episode.durationInFrames / episode.fps;
+  const timedCues = useMemo(
+    () => buildTimedCues(currentWork.scriptLines, totalSec),
+    [currentWork.scriptLines, totalSec],
+  );
 
   const sceneInputProps: StudioSceneProps = useMemo(
     () => ({
       board: episode.supportsBoardEditor ? debouncedBoard : undefined,
-      exposure,
-      subtitleText,
-      subtitleAccent,
-      showWatermark,
-      watermarkText,
+      exposure: currentWork.exposure,
+      subtitleCues: timedCues,
+      showWatermark: currentWork.showWatermark,
+      watermarkText: currentWork.watermarkText,
       previewMode,
     }),
     [
       episode.supportsBoardEditor,
       debouncedBoard,
-      exposure,
-      subtitleText,
-      subtitleAccent,
-      showWatermark,
-      watermarkText,
+      currentWork.exposure,
+      timedCues,
+      currentWork.showWatermark,
+      currentWork.watermarkText,
       previewMode,
     ],
   );
 
   const renderExportProps: StudioSceneProps = useMemo(
     () => ({
-      board: episode.supportsBoardEditor ? currentBoard : undefined,
-      exposure,
-      subtitleText,
-      subtitleAccent,
-      showWatermark,
-      watermarkText,
+      board: episode.supportsBoardEditor ? currentWork.board : undefined,
+      exposure: currentWork.exposure,
+      subtitleCues: timedCues,
+      showWatermark: currentWork.showWatermark,
+      watermarkText: currentWork.watermarkText,
       previewMode: "hd",
     }),
-    [episode.supportsBoardEditor, currentBoard, exposure, subtitleText, subtitleAccent, showWatermark, watermarkText],
+    [
+      episode.supportsBoardEditor,
+      currentWork.board,
+      currentWork.exposure,
+      timedCues,
+      currentWork.showWatermark,
+      currentWork.watermarkText,
+    ],
   );
 
+  const updateBoardField = <K extends keyof BoardConfig>(key: K, value: BoardConfig[K]) => {
+    updateCurrentWork((p) => {
+      const base = p.board || episode.defaultBoard;
+      if (!base) return p;
+      return { ...p, board: { ...base, [key]: value } };
+    });
+  };
+
+  const updateBoardItem = (side: "leftItems" | "rightItems", idx: number, value: string) => {
+    updateCurrentWork((p) => {
+      const base = p.board || episode.defaultBoard;
+      if (!base) return p;
+      const arr = [...base[side]] as [string, string, string];
+      arr[idx] = value;
+      return { ...p, board: { ...base, [side]: arr } };
+    });
+  };
+
   const jumpToFrame = (frame: number) => {
-    playerRef.current?.seekTo(frame);
-  };
-
-  const handleSavePresets = async () => {
-    try {
-      await fetch("/api/presets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ boardByEp }),
-      });
-      showNotice("ok", "Preset Papan 3D tersimpan lokal.");
-    } catch {
-      showNotice("error", "Gagal menyimpan preset.");
-    }
-  };
-
-  const handleResetBoard = () => {
-    if (!episode.defaultBoard) return;
-    setBoardByEp((prev) => ({ ...prev, [episode.id]: { ...episode.defaultBoard! } }));
-    setExposure(1.06);
-    setSubtitleText(episode.defaultSubtitle);
-    showNotice("ok", "Pengaturan dikembalikan ke default.");
+    setViewportActive(true);
+    window.setTimeout(() => playerRef.current?.seekTo(frame), 40);
   };
 
   const handleGenerateVoice = async () => {
+    const cleanText = currentWork.scriptLines
+      .split(/\r?\n/)
+      .map((l) => l.replace(/^\*/, "").trim())
+      .filter(Boolean)
+      .join(" ");
+    if (!cleanText) {
+      showNotice("warn", "Isi naskah di Langkah 1 dulu sebelum membuat suara.");
+      return;
+    }
     try {
       const res = await fetch("/api/voice/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: voiceMode,
-          text: voiceScript,
+          text: cleanText,
           instruct: voiceInstruct,
           temperature: voiceTemp,
           edgeVoice,
-          label: episode.id,
+          label: currentWork.name,
         }),
       });
       const job: StudioJob = await res.json();
       setActiveJob(job);
-      if (job.status === "failed") {
-        showNotice("error", job.error || "Voice generation gagal.");
-      }
+      if (job.status === "failed") showNotice("error", job.error || "Voice generation gagal.");
     } catch {
       showNotice("error", "Tidak bisa menghubungi Studio API.");
     }
@@ -316,18 +463,43 @@ export const App: React.FC = () => {
           concurrency: renderConcurrency,
           gl: renderGl,
           frameRange: frameRange.trim() || undefined,
-          voiceFile: selectedVoiceFile || undefined,
+          voiceFile: currentWork.voiceFile || undefined,
           props: renderExportProps,
         }),
       });
       const job: StudioJob = await res.json();
       setActiveJob(job);
-      setActiveTab("render");
-      if (job.status === "failed") {
-        showNotice("error", job.error || "Gagal memulai render.");
-      }
+      if (job.status === "failed") showNotice("error", job.error || "Gagal memulai render.");
     } catch {
       showNotice("error", "Tidak bisa menghubungi Studio API.");
+    }
+  };
+
+  const handleEnqueueRender = async () => {
+    const mp4 = currentWork.renderFile;
+    if (!mp4) {
+      showNotice("warn", "Render video MP4 di Langkah 3 dulu (atau pilih file render di bawah).");
+      return;
+    }
+    try {
+      const res = await fetch("/api/youtube/enqueue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          renderFile: mp4,
+          title: currentWork.ytTitle || currentWork.name,
+          description: currentWork.ytDescription,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showNotice("error", data.error || "Gagal memasukkan ke antrean.");
+        return;
+      }
+      showNotice("ok", `Masuk antrean YouTube: ${data.folderName}`);
+      refreshLists();
+    } catch {
+      showNotice("error", "Gagal menambah ke antrean YouTube.");
     }
   };
 
@@ -345,38 +517,28 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleEnqueueRender = async () => {
-    if (!enqueueFile) {
-      showNotice("warn", "Pilih file MP4 hasil render dulu.");
-      return;
-    }
-    try {
-      const res = await fetch("/api/youtube/enqueue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          renderFile: enqueueFile,
-          title: enqueueTitle || episode.name,
-          description:
-            enqueueDesc ||
-            `${enqueueTitle || episode.name}\n\nPowered by Naltech\n#shorts #nalatoon #edukasi #faktaunik`,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showNotice("error", data.error || "Gagal memasukkan ke antrean.");
-        return;
-      }
-      showNotice("ok", `Masuk antrean YouTube: ${data.folderName}`);
-      setEnqueueTitle("");
-      setEnqueueDesc("");
-      refreshLists();
-    } catch {
-      showNotice("error", "Gagal menambah ke antrean YouTube.");
-    }
-  };
+  const step1Done = timedCues.length > 0;
+  const step2Done = Boolean(currentWork.voiceFile);
+  const step3Done = Boolean(currentWork.renderFile);
 
-  const durationSec = (episode.durationInFrames / episode.fps).toFixed(1);
+  const stepGuides: Record<StepId, { title: string; desc: string }> = {
+    1: {
+      title: "Langkah 1 — Buat Naskah & Atur Visual 3D",
+      desc: "Tulis naskah (1 baris = 1 subtitle otomatis di monitor 3D) dan sesuaikan teks Papan 3D.",
+    },
+    2: {
+      title: "Langkah 2 — Buat Suara Narasi AI",
+      desc: "Naskah dari Langkah 1 otomatis masuk ke sini. Generate audio lalu pasang ke proyek ini.",
+    },
+    3: {
+      title: "Langkah 3 — Render Video Full HD (MP4)",
+      desc: "Gabungkan animasi 3D + subtitle + suara AI menjadi file MP4 1080×1920 siap upload.",
+    },
+    4: {
+      title: "Langkah 4 — Antrean & Jadwal YouTube Shorts",
+      desc: "Masukkan MP4 hasil Langkah 3 ke antrean dan jadwalkan tayang otomatis jam 19:00 WIB.",
+    },
+  };
 
   return (
     <div className="app-shell">
@@ -388,24 +550,15 @@ export const App: React.FC = () => {
           </div>
           <span>Nalatoon</span>
           <span className="brand-divider">//</span>
-          <span className="brand-console">3D DIORAMA CONSOLE</span>
+          <span className="brand-console">3D VIDEO CREATOR</span>
         </div>
 
         <div className="topbar-center">
-          <select
-            aria-label="Pilih Episode 3D"
-            className="episode-select"
-            value={episode.id}
-            onChange={(e) => handleSelectEpisode(e.target.value)}
-          >
-            {EPISODES.map((ep, idx) => (
-              <option key={ep.id} value={ep.id}>
-                {String(idx + 1).padStart(2, "0")} — {ep.name}
-              </option>
-            ))}
-          </select>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 13 }}>
+            {currentWork.name}
+          </span>
           <span className="readout">
-            1080×1920 · {episode.fps}FPS · {durationSec}S
+            {episode.name.toUpperCase()} · {totalSec.toFixed(0)}S
           </span>
         </div>
 
@@ -420,31 +573,82 @@ export const App: React.FC = () => {
               YT
             </span>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={handleStartRender}
-            disabled={activeJob?.status === "running"}
-          >
-            <Film size={13} /> Render MP4
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowCreator(true)}>
+            <Plus size={13} /> Buat Episode Baru
           </button>
         </div>
       </header>
 
       <div className="workspace">
-        {/* Left Sidebar: Numbered Episode Reel */}
-        <aside className="sidebar" aria-label="Daftar Episode 3D">
-          <div className="sidebar-header">
-            <span>REEL KOMPOSISI</span>
-            <span>{String(EPISODES.length).padStart(2, "0")}</span>
+        {/* Left Sidebar: My Projects vs Built-in 3D Templates */}
+        <aside className="sidebar" aria-label="Proyek dan Template 3D">
+          <div className="sidebar-cta">
+            <button type="button" className="btn btn-primary btn-full" onClick={() => setShowCreator(true)}>
+              <Plus size={14} /> Buat Episode Baru
+            </button>
           </div>
+
           <div className="episode-list">
+            <div className="sidebar-header">
+              <span>PROYEK SAYA</span>
+              <span>{String(projects.length).padStart(2, "0")}</span>
+            </div>
+
+            {projects.length === 0 ? (
+              <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
+                <p className="hint">
+                  Belum ada proyek tersimpan. Klik <strong>Buat Episode Baru</strong> di atas untuk membuat videomu
+                  sendiri dari template 3D.
+                </p>
+              </div>
+            ) : (
+              projects.map((p) => {
+                const epDef = EPISODES.find((e) => e.id === p.templateId);
+                const isActive = p.id === activeProjectId;
+                return (
+                  <div key={p.id} className={`project-row ${isActive ? "active" : ""}`}>
+                    <button
+                      type="button"
+                      className="project-select-btn"
+                      onClick={() => {
+                        setActiveProjectId(p.id);
+                        setStep(1);
+                      }}
+                    >
+                      <span className="episode-row-title">{p.name}</span>
+                      <span className="episode-row-kind">{epDef?.name || p.templateId}</span>
+                      <span className="step-dots" title="Progres 4 langkah">
+                        <span className={`step-dot ${p.scriptLines.trim() ? "done" : ""}`} />
+                        <span className={`step-dot ${p.voiceFile ? "done" : ""}`} />
+                        <span className={`step-dot ${p.renderFile ? "done" : ""}`} />
+                        <span className="step-dot" />
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="project-del-btn"
+                      title="Hapus proyek"
+                      aria-label={`Hapus ${p.name}`}
+                      onClick={() => handleDeleteProject(p.id)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+
+            <div className="sidebar-header">
+              <span>TEMPLATE 3D BAWAAN</span>
+              <span>{String(EPISODES.length).padStart(2, "0")}</span>
+            </div>
+
             {EPISODES.map((ep, idx) => (
               <button
                 key={ep.id}
                 type="button"
-                className={`episode-row ${ep.id === episode.id ? "active" : ""}`}
-                onClick={() => handleSelectEpisode(ep.id)}
+                className={`episode-row ${!activeProject && ep.id === selectedTemplateId ? "active" : ""}`}
+                onClick={() => handleSelectBuiltInTemplate(ep.id)}
               >
                 <span className="episode-num">{String(idx + 1).padStart(2, "0")}</span>
                 <span>
@@ -465,17 +669,26 @@ export const App: React.FC = () => {
             </div>
           )}
 
+          {!activeProject && (
+            <div className="notice-strip warn" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span>Sedang preview template bawaan ({episode.name}).</span>
+              <button type="button" className="btn btn-sm" onClick={handleCloneTemplateToProject}>
+                <Copy size={11} /> Simpan jadi Proyek Saya
+              </button>
+            </div>
+          )}
+
           <div className="monitor-housing">
             <div className="monitor-strip">
               <span className="monitor-rec">
                 <span className={`led-dot ${viewportActive ? "rec" : ""}`} />
-                {viewportActive ? `MONITOR 9:16 (${previewMode.toUpperCase()})` : "3D SLEEP (0 MB VRAM)"}
+                {viewportActive ? `PREVIEW 9:16 (${previewMode.toUpperCase()})` : "3D SLEEP (0 MB VRAM)"}
               </span>
               <div className="monitor-actions">
                 <button
                   type="button"
                   className={`mini-toggle ${previewMode === "lite" ? "active" : ""}`}
-                  title="Mode ringan 540p tanpa bokeh untuk hemat RAM (Render MP4 tetap 100% HD)"
+                  title="Mode ringan 540p hemat RAM (Render MP4 tetap 100% HD)"
                   onClick={() => setPreviewMode((m) => (m === "lite" ? "hd" : "lite"))}
                 >
                   {previewMode === "lite" ? "LITE" : "FULL HD"}
@@ -520,12 +733,7 @@ export const App: React.FC = () => {
 
           <div className="transport-bar" aria-label="Lompat cepat ke shot">
             {episode.bookmarks.map((bm, i) => (
-              <button
-                key={bm.label}
-                type="button"
-                className="shot-key"
-                onClick={() => jumpToFrame(bm.frame)}
-              >
+              <button key={bm.label} type="button" className="shot-key" onClick={() => jumpToFrame(bm.frame)}>
                 <span className="shot-key-idx">{String(i + 1).padStart(2, "0")}</span>
                 <span>{bm.label}</span>
               </button>
@@ -535,45 +743,60 @@ export const App: React.FC = () => {
           <div className="stage-caption">{episode.description}</div>
         </main>
 
-        {/* Right Architectural Inspector (Flat Sections, Zero Card Nesting) */}
+        {/* Right Panel: Guided 4-Step Wizard */}
         <aside className="inspector">
-          <div className="tabs" role="tablist" aria-label="Panel Kontrol Studio">
+          <div className="tabs" role="tablist" aria-label="4 Langkah Pembuatan Video">
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === "editor"}
+              aria-selected={step === 1}
               className="tab-btn"
-              onClick={() => setActiveTab("editor")}
+              onClick={() => setStep(1)}
             >
-              <SlidersHorizontal size={13} /> Editor 3D
+              <span className={`step-num ${step1Done ? "done" : ""}`}>
+                {step1Done ? <Check size={10} /> : "01"}
+              </span>
+              <span>Naskah</span>
             </button>
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === "voice"}
+              aria-selected={step === 2}
               className="tab-btn"
-              onClick={() => setActiveTab("voice")}
+              onClick={() => setStep(2)}
             >
-              <Mic size={13} /> Voice AI
+              <span className={`step-num ${step2Done ? "done" : ""}`}>
+                {step2Done ? <Check size={10} /> : "02"}
+              </span>
+              <span>Suara AI</span>
             </button>
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === "render"}
+              aria-selected={step === 3}
               className="tab-btn"
-              onClick={() => setActiveTab("render")}
+              onClick={() => setStep(3)}
             >
-              <Film size={13} /> Render
+              <span className={`step-num ${step3Done ? "done" : ""}`}>
+                {step3Done ? <Check size={10} /> : "03"}
+              </span>
+              <span>Render</span>
             </button>
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === "youtube"}
+              aria-selected={step === 4}
               className="tab-btn"
-              onClick={() => setActiveTab("youtube")}
+              onClick={() => setStep(4)}
             >
-              <Youtube size={13} /> YouTube
+              <span className="step-num">04</span>
+              <span>YouTube</span>
             </button>
+          </div>
+
+          <div className="step-guide">
+            <strong>{stepGuides[step].title}</strong>
+            <div>{stepGuides[step].desc}</div>
           </div>
 
           <div className="inspector-body">
@@ -600,84 +823,52 @@ export const App: React.FC = () => {
               </section>
             )}
 
-            {/* TAB 1: EDITOR 3D */}
-            {activeTab === "editor" && (
+            {/* STEP 1: NASKAH & VISUAL 3D */}
+            {step === 1 && (
               <>
                 <section className="panel-section">
                   <div className="section-head">
                     <span className="section-title">
-                      <Layers size={13} /> Kamera & Overlay
+                      <Layers size={13} /> Identitas & Naskah Subtitle
                     </span>
-                    <button type="button" className="btn btn-sm" onClick={handleResetBoard}>
-                      <RotateCcw size={12} /> Reset
-                    </button>
+                    <span className="readout">{timedCues.length} BARIS SUBTITLE</span>
                   </div>
 
                   <div className="field">
-                    <div className="row-between">
-                      <label htmlFor="exposure-range">Exposure Kamera 3D</label>
-                      <span className="readout">{exposure.toFixed(2)} EV</span>
-                    </div>
+                    <label htmlFor="proj-name">Nama Episode</label>
                     <input
-                      id="exposure-range"
-                      type="range"
-                      min="0.80"
-                      max="1.35"
-                      step="0.02"
-                      value={exposure}
-                      onChange={(e) => setExposure(parseFloat(e.target.value))}
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor="sub-preview">Live Subtitle Preview</label>
-                    <input
-                      id="sub-preview"
+                      id="proj-name"
                       className="input"
-                      placeholder="Kosongkan untuk sembunyikan subtitle preview"
-                      value={subtitleText}
-                      onChange={(e) => setSubtitleText(e.target.value)}
+                      value={currentWork.name}
+                      onChange={(e) =>
+                        updateCurrentWork((p) => ({
+                          ...p,
+                          name: e.target.value,
+                          ytTitle: p.ytTitle === p.name ? e.target.value : p.ytTitle,
+                        }))
+                      }
                     />
                   </div>
 
-                  <div className="switch-row">
-                    <label htmlFor="sub-accent">Warna Aksen Kuning (Punchline)</label>
-                    <input
-                      id="sub-accent"
-                      type="checkbox"
-                      checked={subtitleAccent}
-                      onChange={(e) => setSubtitleAccent(e.target.checked)}
+                  <div className="field">
+                    <label htmlFor="script-lines">
+                      Naskah Episode (1 baris = 1 subtitle otomatis; awali * untuk kuning)
+                    </label>
+                    <textarea
+                      id="script-lines"
+                      className="textarea"
+                      style={{ minHeight: 118 }}
+                      value={currentWork.scriptLines}
+                      onChange={(e) => updateCurrentWork((p) => ({ ...p, scriptLines: e.target.value }))}
                     />
                   </div>
-
-                  <div className="switch-row">
-                    <label htmlFor="wm-toggle">Watermark Bawah</label>
-                    <input
-                      id="wm-toggle"
-                      type="checkbox"
-                      checked={showWatermark}
-                      onChange={(e) => setShowWatermark(e.target.checked)}
-                    />
-                  </div>
-
-                  {showWatermark && (
-                    <div className="field">
-                      <label htmlFor="wm-text">Teks Watermark</label>
-                      <input
-                        id="wm-text"
-                        className="input"
-                        value={watermarkText}
-                        onChange={(e) => setWatermarkText(e.target.value)}
-                      />
-                    </div>
-                  )}
                 </section>
 
-                {episode.supportsBoardEditor && currentBoard ? (
+                {episode.supportsBoardEditor && currentWork.board ? (
                   <section className="panel-section">
                     <div className="section-head">
                       <span className="section-title">
-                        <SlidersHorizontal size={13} /> Papan Infografis 3D
+                        <SlidersHorizontal size={13} /> Papan Infografis 3D (Live)
                       </span>
                       <div className="row">
                         <button
@@ -690,22 +881,25 @@ export const App: React.FC = () => {
                         >
                           <Play size={11} /> Lihat Papan
                         </button>
-                        <button type="button" className="btn btn-primary btn-sm" onClick={handleSavePresets}>
-                          <Save size={12} /> Simpan
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={() => {
+                            if (!episode.defaultBoard) return;
+                            updateCurrentWork((p) => ({ ...p, board: { ...episode.defaultBoard! }, exposure: 1.06 }));
+                          }}
+                        >
+                          <RotateCcw size={11} /> Reset
                         </button>
                       </div>
                     </div>
-
-                    <p className="hint">
-                      Perubahan teks langsung memperbarui tekstur papan kayu di dalam scene 3D secara real-time.
-                    </p>
 
                     <div className="field">
                       <label htmlFor="board-title">Judul Papan 3D</label>
                       <input
                         id="board-title"
                         className="input"
-                        value={currentBoard.title}
+                        value={currentWork.board.title}
                         onChange={(e) => updateBoardField("title", e.target.value)}
                       />
                     </div>
@@ -715,7 +909,7 @@ export const App: React.FC = () => {
                       <input
                         id="board-subtitle"
                         className="input"
-                        value={currentBoard.subtitle}
+                        value={currentWork.board.subtitle}
                         onChange={(e) => updateBoardField("subtitle", e.target.value)}
                       />
                     </div>
@@ -726,10 +920,10 @@ export const App: React.FC = () => {
                         <input
                           className="input"
                           aria-label="Header kolom kiri"
-                          value={currentBoard.leftHeader}
+                          value={currentWork.board.leftHeader}
                           onChange={(e) => updateBoardField("leftHeader", e.target.value)}
                         />
-                        {currentBoard.leftItems.map((it, i) => (
+                        {currentWork.board.leftItems.map((it, i) => (
                           <input
                             key={i}
                             className="input"
@@ -741,7 +935,7 @@ export const App: React.FC = () => {
                         <input
                           className="input"
                           aria-label="Kesimpulan kiri"
-                          value={currentBoard.leftFooter}
+                          value={currentWork.board.leftFooter}
                           onChange={(e) => updateBoardField("leftFooter", e.target.value)}
                         />
                       </div>
@@ -751,10 +945,10 @@ export const App: React.FC = () => {
                         <input
                           className="input"
                           aria-label="Header kolom kanan"
-                          value={currentBoard.rightHeader}
+                          value={currentWork.board.rightHeader}
                           onChange={(e) => updateBoardField("rightHeader", e.target.value)}
                         />
-                        {currentBoard.rightItems.map((it, i) => (
+                        {currentWork.board.rightItems.map((it, i) => (
                           <input
                             key={i}
                             className="input"
@@ -766,36 +960,66 @@ export const App: React.FC = () => {
                         <input
                           className="input"
                           aria-label="Kesimpulan kanan"
-                          value={currentBoard.rightFooter}
+                          value={currentWork.board.rightFooter}
                           onChange={(e) => updateBoardField("rightFooter", e.target.value)}
                         />
                       </div>
                     </div>
                   </section>
-                ) : (
-                  <section className="panel-section">
-                    <span className="section-title">Catatan Episode</span>
-                    <p className="hint">
-                      Editor papan infografis 3D aktif di <strong>Mina Padi Ikan Mas</strong> dan{" "}
-                      <strong>Sawah Padi-Bebek (Aigamo)</strong>. Preview, voiceover AI, dan render MP4 tetap tersedia
-                      penuh untuk episode ini.
-                    </p>
-                  </section>
-                )}
+                ) : null}
+
+                <section className="panel-section">
+                  <span className="section-title">Kamera & Watermark</span>
+                  <div className="field">
+                    <div className="row-between">
+                      <label htmlFor="exposure-range">Exposure Kamera 3D</label>
+                      <span className="readout">{currentWork.exposure.toFixed(2)} EV</span>
+                    </div>
+                    <input
+                      id="exposure-range"
+                      type="range"
+                      min="0.80"
+                      max="1.35"
+                      step="0.02"
+                      value={currentWork.exposure}
+                      onChange={(e) => updateCurrentWork((p) => ({ ...p, exposure: parseFloat(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="switch-row">
+                    <label htmlFor="wm-toggle">Tampilkan Watermark Bawah</label>
+                    <input
+                      id="wm-toggle"
+                      type="checkbox"
+                      checked={currentWork.showWatermark}
+                      onChange={(e) => updateCurrentWork((p) => ({ ...p, showWatermark: e.target.checked }))}
+                    />
+                  </div>
+                  {currentWork.showWatermark && (
+                    <div className="field">
+                      <label htmlFor="wm-text">Teks Watermark</label>
+                      <input
+                        id="wm-text"
+                        className="input"
+                        value={currentWork.watermarkText}
+                        onChange={(e) => updateCurrentWork((p) => ({ ...p, watermarkText: e.target.value }))}
+                      />
+                    </div>
+                  )}
+                </section>
               </>
             )}
 
-            {/* TAB 2: VOICE AI */}
-            {activeTab === "voice" && (
+            {/* STEP 2: SUARA AI */}
+            {step === 2 && (
               <>
                 <section className="panel-section">
                   <div className="section-head">
                     <span className="section-title">
-                      <Mic size={13} /> Qwen3-TTS MLX
+                      <Mic size={13} /> Pilih Engine Suara
                     </span>
                     <span className="led-item">
                       <span className={`led-dot ${health?.capabilities.mlxTts ? "on" : ""}`} />
-                      {health?.capabilities.mlxTts ? "GPU SIAP" : "OFFLINE"}
+                      {health?.capabilities.mlxTts ? "MLX SIAP" : "EDGE TTS"}
                     </span>
                   </div>
 
@@ -839,12 +1063,12 @@ export const App: React.FC = () => {
                   )}
 
                   <div className="field">
-                    <label htmlFor="voice-script">Naskah Bahasa Indonesia</label>
+                    <label htmlFor="voice-script">Naskah Narasi (tersinkron dari Langkah 1)</label>
                     <textarea
                       id="voice-script"
                       className="textarea"
-                      value={voiceScript}
-                      onChange={(e) => setVoiceScript(e.target.value)}
+                      value={currentWork.scriptLines}
+                      onChange={(e) => updateCurrentWork((p) => ({ ...p, scriptLines: e.target.value }))}
                     />
                   </div>
 
@@ -854,28 +1078,30 @@ export const App: React.FC = () => {
                       <textarea
                         id="voice-instruct"
                         className="textarea"
-                        style={{ minHeight: 68 }}
+                        style={{ minHeight: 62 }}
                         value={voiceInstruct}
                         onChange={(e) => setVoiceInstruct(e.target.value)}
                       />
                     </div>
                   )}
 
-                  <div className="field">
-                    <div className="row-between">
-                      <label htmlFor="voice-temp">Temperature Intonasi</label>
-                      <span className="readout">{voiceTemp.toFixed(2)}</span>
+                  {voiceMode !== "edge" && (
+                    <div className="field">
+                      <div className="row-between">
+                        <label htmlFor="voice-temp">Temperature Intonasi</label>
+                        <span className="readout">{voiceTemp.toFixed(2)}</span>
+                      </div>
+                      <input
+                        id="voice-temp"
+                        type="range"
+                        min="0.55"
+                        max="1.10"
+                        step="0.05"
+                        value={voiceTemp}
+                        onChange={(e) => setVoiceTemp(parseFloat(e.target.value))}
+                      />
                     </div>
-                    <input
-                      id="voice-temp"
-                      type="range"
-                      min="0.55"
-                      max="1.10"
-                      step="0.05"
-                      value={voiceTemp}
-                      onChange={(e) => setVoiceTemp(parseFloat(e.target.value))}
-                    />
-                  </div>
+                  )}
 
                   <button
                     type="button"
@@ -890,53 +1116,75 @@ export const App: React.FC = () => {
                 <section className="panel-section">
                   <div className="section-head">
                     <span className="section-title">
-                      <Volume2 size={13} /> Takes Tersimpan ({voices.length})
+                      <Volume2 size={13} /> Pilih Audio untuk Video Ini ({voices.length})
                     </span>
-                    <button type="button" className="btn btn-sm" onClick={refreshLists} aria-label="Segarkan daftar suara">
+                    <button type="button" className="btn btn-sm" onClick={refreshLists} aria-label="Segarkan suara">
                       <RefreshCw size={12} />
                     </button>
                   </div>
 
                   {voices.length === 0 ? (
-                    <p className="hint">Belum ada file voiceover di out/studio_voices/.</p>
+                    <p className="hint">Belum ada voiceover. Klik tombol Generate di atas.</p>
                   ) : (
-                    voices.map((v) => (
-                      <div key={v.name} className="list-row">
-                        <div className="row-between">
-                          <strong style={{ fontSize: 12 }}>{v.name}</strong>
-                          <span className="readout">{v.sizeMB} MB</span>
+                    voices.map((v) => {
+                      const active = currentWork.voiceFile === v.name;
+                      return (
+                        <div key={v.name} className="list-row">
+                          <div className="row-between">
+                            <strong style={{ fontSize: 12 }}>{v.name}</strong>
+                            <span className="readout">{v.sizeMB} MB</span>
+                          </div>
+                          <audio controls src={v.url} />
+                          <div className="row-between">
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${active ? "btn-primary" : ""}`}
+                              onClick={() => {
+                                updateCurrentWork((p) => ({ ...p, voiceFile: v.name }));
+                                showNotice("ok", `Audio terpasang ke proyek: ${v.name}`);
+                              }}
+                            >
+                              <Check size={12} />
+                              {active ? "Terpasang di Proyek" : "Pasang ke Proyek"}
+                            </button>
+                            <a className="btn btn-sm" href={v.url} download={v.name}>
+                              <Download size={12} /> Unduh
+                            </a>
+                          </div>
                         </div>
-                        <audio controls src={v.url} />
-                        <div className="row-between">
-                          <button
-                            type="button"
-                            className={`btn btn-sm ${selectedVoiceFile === v.name ? "btn-primary" : ""}`}
-                            onClick={() => {
-                              setSelectedVoiceFile(v.name);
-                              showNotice("ok", `Dipilih untuk muxing render: ${v.name}`);
-                            }}
-                          >
-                            <Check size={12} />
-                            {selectedVoiceFile === v.name ? "Aktif di Render" : "Pakai di Render"}
-                          </button>
-                          <a className="btn btn-sm" href={v.url} download={v.name}>
-                            <Download size={12} /> Unduh
-                          </a>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </section>
               </>
             )}
 
-            {/* TAB 3: RENDER MP4 */}
-            {activeTab === "render" && (
+            {/* STEP 3: RENDER MP4 */}
+            {step === 3 && (
               <>
                 <section className="panel-section">
                   <span className="section-title">
-                    <Film size={13} /> Konfigurasi Render ({episode.id})
+                    <Film size={13} /> Ringkasan Sebelum Render
                   </span>
+
+                  <div className="checklist">
+                    <div className="check-row">
+                      <span>Template 3D</span>
+                      <span className="check-ok">{episode.id} (1080×1920 HD)</span>
+                    </div>
+                    <div className="check-row">
+                      <span>Subtitle Otomatis</span>
+                      <span className={timedCues.length > 0 ? "check-ok" : "check-warn"}>
+                        {timedCues.length > 0 ? `${timedCues.length} baris siap` : "Kosong"}
+                      </span>
+                    </div>
+                    <div className="check-row">
+                      <span>Track Voiceover</span>
+                      <span className={currentWork.voiceFile ? "check-ok" : "check-warn"}>
+                        {currentWork.voiceFile || "Tanpa suara (opsional)"}
+                      </span>
+                    </div>
+                  </div>
 
                   <div className="grid-2">
                     <div className="field">
@@ -961,7 +1209,7 @@ export const App: React.FC = () => {
                         value={renderConcurrency}
                         onChange={(e) => setRenderConcurrency(parseInt(e.target.value, 10))}
                       >
-                        <option value={1}>1 — Hemat RAM</option>
+                        <option value={1}>1 — Hemat RAM (8GB)</option>
                         <option value={2}>2 — Standar</option>
                         <option value={3}>3 — Cepat</option>
                       </select>
@@ -976,13 +1224,13 @@ export const App: React.FC = () => {
                       value={renderGl}
                       onChange={(e) => setRenderGl(e.target.value as "angle" | "swiftshader")}
                     >
-                      <option value="angle">ANGLE — GPU Hardware (Mac / Windows / Linux Desktop)</option>
+                      <option value="angle">ANGLE — GPU Hardware (Mac / Windows / Linux)</option>
                       <option value="swiftshader">SwiftShader — CPU Fallback (VPS / Tanpa GPU)</option>
                     </select>
                   </div>
 
                   <div className="field">
-                    <label htmlFor="frame-range">Rentang Frame Opsional (mis. 0-150 untuk tes 5 detik)</label>
+                    <label htmlFor="frame-range">Tes Cepat Rentang Frame (mis. 0-150 = 5 detik)</label>
                     <input
                       id="frame-range"
                       className="input"
@@ -992,81 +1240,67 @@ export const App: React.FC = () => {
                     />
                   </div>
 
-                  <div className="field">
-                    <label htmlFor="mux-voice">Track Audio Voiceover</label>
-                    <select
-                      id="mux-voice"
-                      className="select"
-                      value={selectedVoiceFile}
-                      onChange={(e) => setSelectedVoiceFile(e.target.value)}
-                    >
-                      <option value="">Tanpa audio (video 3D saja)</option>
-                      {voices.map((v) => (
-                        <option key={v.name} value={v.name}>
-                          {v.name} ({v.sizeMB} MB)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
                   <button
                     type="button"
                     className="btn btn-primary btn-full"
                     disabled={activeJob?.status === "running"}
                     onClick={handleStartRender}
                   >
-                    <Film size={14} /> Render {episode.id} ke MP4
+                    <Film size={14} /> Render Video MP4 Sekarang
                   </button>
                 </section>
 
                 <section className="panel-section">
                   <div className="section-head">
-                    <span className="section-title">Output Render ({renders.length})</span>
-                    <button type="button" className="btn btn-sm" onClick={refreshLists} aria-label="Segarkan daftar render">
+                    <span className="section-title">Hasil Render MP4 ({renders.length})</span>
+                    <button type="button" className="btn btn-sm" onClick={refreshLists} aria-label="Segarkan render">
                       <RefreshCw size={12} />
                     </button>
                   </div>
 
                   {renders.length === 0 ? (
-                    <p className="hint">Belum ada video di out/studio_renders/.</p>
+                    <p className="hint">Belum ada video render. Klik Render Video MP4 di atas.</p>
                   ) : (
-                    renders.map((r) => (
-                      <div key={r.name} className="list-row">
-                        <div className="row-between">
-                          <strong style={{ fontSize: 12 }}>{r.name}</strong>
-                          <span className="readout">{r.sizeMB} MB</span>
+                    renders.map((r) => {
+                      const active = currentWork.renderFile === r.name;
+                      return (
+                        <div key={r.name} className="list-row">
+                          <div className="row-between">
+                            <strong style={{ fontSize: 12 }}>{r.name}</strong>
+                            <span className="readout">{r.sizeMB} MB</span>
+                          </div>
+                          <video controls src={r.url} style={{ maxHeight: 240 }} />
+                          <div className="row-between">
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${active ? "btn-primary" : ""}`}
+                              onClick={() => {
+                                updateCurrentWork((p) => ({ ...p, renderFile: r.name }));
+                                setStep(4);
+                              }}
+                            >
+                              <Check size={12} />
+                              {active ? "Siap di Langkah 4" : "Pakai untuk Upload →"}
+                            </button>
+                            <a className="btn btn-sm" href={r.url} download={r.name}>
+                              <Download size={12} /> Unduh
+                            </a>
+                          </div>
                         </div>
-                        <video controls src={r.url} style={{ maxHeight: 250 }} />
-                        <div className="row-between">
-                          <button
-                            type="button"
-                            className="btn btn-secondary-accent btn-sm"
-                            onClick={() => {
-                              setEnqueueFile(r.name);
-                              setEnqueueTitle(episode.name);
-                              setActiveTab("youtube");
-                            }}
-                          >
-                            <Send size={12} /> Kirim ke Antrean YT
-                          </button>
-                          <a className="btn btn-sm" href={r.url} download={r.name}>
-                            <Download size={12} /> Unduh
-                          </a>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </section>
               </>
             )}
 
-            {/* TAB 4: YOUTUBE SCHEDULER */}
-            {activeTab === "youtube" && (
+            {/* STEP 4: UPLOAD YOUTUBE */}
+            {step === 4 && (
               <>
                 <section className="panel-section">
                   <div className="section-head">
                     <span className="section-title">
-                      <Youtube size={13} /> YouTube Data API v3
+                      <Youtube size={13} /> Kirim ke Antrean YouTube
                     </span>
                     <button
                       type="button"
@@ -1078,10 +1312,55 @@ export const App: React.FC = () => {
                     </button>
                   </div>
 
+                  <div className="field">
+                    <label htmlFor="yt-file">File Video MP4 (dari Langkah 3)</label>
+                    <select
+                      id="yt-file"
+                      className="select"
+                      value={currentWork.renderFile}
+                      onChange={(e) => updateCurrentWork((p) => ({ ...p, renderFile: e.target.value }))}
+                    >
+                      <option value="">-- Pilih file MP4 hasil render --</option>
+                      {renders.map((r) => (
+                        <option key={r.name} value={r.name}>
+                          {r.name} ({r.sizeMB} MB)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="yt-title">Judul YouTube Shorts</label>
+                    <input
+                      id="yt-title"
+                      className="input"
+                      placeholder="Maks. 100 karakter, tanpa emoji"
+                      value={currentWork.ytTitle}
+                      onChange={(e) => updateCurrentWork((p) => ({ ...p, ytTitle: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="yt-desc">Deskripsi & Hashtags</label>
+                    <textarea
+                      id="yt-desc"
+                      className="textarea"
+                      style={{ minHeight: 68 }}
+                      value={currentWork.ytDescription}
+                      onChange={(e) => updateCurrentWork((p) => ({ ...p, ytDescription: e.target.value }))}
+                    />
+                  </div>
+
+                  <button type="button" className="btn btn-secondary-accent btn-full" onClick={handleEnqueueRender}>
+                    <Send size={13} /> 1. Masukkan Video ke Antrean
+                  </button>
+                </section>
+
+                <section className="panel-section">
+                  <span className="section-title">2. Jadwalkan Tayang Otomatis</span>
                   <p className="hint">
                     Folder antrean: <code>{queueData?.queueDir || "-"}</code>
                   </p>
-
                   {queueData?.warning && <div className="notice-strip warn">{queueData.warning}</div>}
 
                   <div className="grid-2">
@@ -1117,11 +1396,7 @@ export const App: React.FC = () => {
                       className="btn btn-sm"
                       disabled={activeJob?.status === "running"}
                       onClick={() =>
-                        handleYoutubeAction("/api/youtube/schedule", {
-                          hour: ytHour,
-                          minute: ytMinute,
-                          dryRun: true,
-                        })
+                        handleYoutubeAction("/api/youtube/schedule", { hour: ytHour, minute: ytMinute, dryRun: true })
                       }
                     >
                       Dry-Run Cek Jadwal
@@ -1131,11 +1406,7 @@ export const App: React.FC = () => {
                       className="btn btn-primary btn-sm"
                       disabled={activeJob?.status === "running"}
                       onClick={() =>
-                        handleYoutubeAction("/api/youtube/schedule", {
-                          hour: ytHour,
-                          minute: ytMinute,
-                          dryRun: false,
-                        })
+                        handleYoutubeAction("/api/youtube/schedule", { hour: ytHour, minute: ytMinute, dryRun: false })
                       }
                     >
                       <UploadCloud size={13} /> Jadwalkan Semua
@@ -1144,52 +1415,8 @@ export const App: React.FC = () => {
                 </section>
 
                 <section className="panel-section">
-                  <span className="section-title">Tambah Video ke Antrean</span>
-                  <div className="field">
-                    <label htmlFor="yt-file">File Render MP4</label>
-                    <select
-                      id="yt-file"
-                      className="select"
-                      value={enqueueFile}
-                      onChange={(e) => setEnqueueFile(e.target.value)}
-                    >
-                      <option value="">-- Pilih MP4 --</option>
-                      {renders.map((r) => (
-                        <option key={r.name} value={r.name}>
-                          {r.name} ({r.sizeMB} MB)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label htmlFor="yt-title">Judul YouTube Shorts</label>
-                    <input
-                      id="yt-title"
-                      className="input"
-                      placeholder="Maks. 100 karakter, tanpa emoji"
-                      value={enqueueTitle}
-                      onChange={(e) => setEnqueueTitle(e.target.value)}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="yt-desc">Deskripsi & Hashtags</label>
-                    <textarea
-                      id="yt-desc"
-                      className="textarea"
-                      style={{ minHeight: 64 }}
-                      placeholder="Deskripsi singkat + #shorts #nalatoon #faktaunik"
-                      value={enqueueDesc}
-                      onChange={(e) => setEnqueueDesc(e.target.value)}
-                    />
-                  </div>
-                  <button type="button" className="btn btn-secondary-accent btn-full" onClick={handleEnqueueRender}>
-                    <Send size={13} /> Masukkan ke Antrean Upload
-                  </button>
-                </section>
-
-                <section className="panel-section">
                   <div className="section-head">
-                    <span className="section-title">Antrean Aktif ({queueData?.items.length ?? 0})</span>
+                    <span className="section-title">Antrean Siap Upload ({queueData?.items.length ?? 0})</span>
                     <button type="button" className="btn btn-sm" onClick={refreshLists} aria-label="Segarkan antrean">
                       <RefreshCw size={12} />
                     </button>
@@ -1203,9 +1430,7 @@ export const App: React.FC = () => {
                           <strong style={{ fontSize: 12 }}>{it.title}</strong>
                           <span className="readout">{it.sizeMB} MB</span>
                         </div>
-                        <span className="hint">
-                          {it.name} · {it.hasCaption ? "caption.txt siap" : "tanpa caption.txt"}
-                        </span>
+                        <span className="hint">{it.name}</span>
                       </div>
                     ))
                   )}
@@ -1213,7 +1438,7 @@ export const App: React.FC = () => {
 
                 {queueData && queueData.history.length > 0 && (
                   <section className="panel-section">
-                    <span className="section-title">Riwayat Terjadwal / Terbit</span>
+                    <span className="section-title">Riwayat Tayang</span>
                     {queueData.history.map((h, i) => (
                       <div key={i} className="list-row">
                         <strong style={{ fontSize: 12 }}>{h.title || "Short"}</strong>
@@ -1232,8 +1457,104 @@ export const App: React.FC = () => {
               </>
             )}
           </div>
+
+          {/* Sticky Bottom Wizard Navigation */}
+          <footer className="wizard-footer">
+            {step > 1 ? (
+              <button type="button" className="btn btn-sm" onClick={() => setStep((s) => (s - 1) as StepId)}>
+                <ArrowLeft size={13} /> Kembali
+              </button>
+            ) : !activeProject ? (
+              <button type="button" className="btn btn-sm" onClick={handleCloneTemplateToProject}>
+                <Save size={12} /> Simpan Proyek
+              </button>
+            ) : (
+              <span className="readout">AUTO-SAVED</span>
+            )}
+
+            {step < 4 ? (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setStep((s) => (s + 1) as StepId)}
+              >
+                Lanjut: {step === 1 ? "2. Suara AI" : step === 2 ? "3. Render MP4" : "4. YouTube"}{" "}
+                <ArrowRight size={13} />
+              </button>
+            ) : (
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowCreator(true)}>
+                <Plus size={13} /> Buat Episode Baru
+              </button>
+            )}
+          </footer>
         </aside>
       </div>
+
+      {/* Modal: + Buat Episode Baru */}
+      {showCreator && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Buat Episode Baru">
+          <div className="modal-panel">
+            <div className="modal-head">
+              <span>Buat Episode 3D Baru</span>
+              <button type="button" className="btn btn-sm" onClick={() => setShowCreator(false)} aria-label="Tutup">
+                <X size={14} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="field">
+                <label htmlFor="new-ep-name">1. Judul / Topik Episode</label>
+                <input
+                  id="new-ep-name"
+                  className="input"
+                  placeholder="Contoh: Kenapa Sistem Subak Bali Nggak Pernah Kekeringan?"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                />
+              </div>
+
+              <div className="field">
+                <label>2. Pilih Template Dunia 3D</label>
+                <div className="template-grid">
+                  {EPISODES.map((ep) => (
+                    <button
+                      key={ep.id}
+                      type="button"
+                      className={`template-card ${newTemplateId === ep.id ? "selected" : ""}`}
+                      onClick={() => setNewTemplateId(ep.id)}
+                    >
+                      <strong>{ep.name}</strong>
+                      <span>
+                        {ep.badge} · {(ep.durationInFrames / ep.fps).toFixed(0)}s
+                        {ep.supportsBoardEditor ? " · Edit Papan 3D" : ""}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="field">
+                <label htmlFor="new-ep-script">3. Naskah Awal (Opsional — 1 baris = 1 subtitle)</label>
+                <textarea
+                  id="new-ep-script"
+                  className="textarea"
+                  placeholder="Kosongkan untuk mulai dari contoh naskah bawaan template..."
+                  value={newScript}
+                  onChange={(e) => setNewScript(e.target.value)}
+                />
+              </div>
+
+              <div className="row-between">
+                <button type="button" className="btn" onClick={() => setShowCreator(false)}>
+                  Batal
+                </button>
+                <button type="button" className="btn btn-primary" onClick={handleCreateProject}>
+                  <Plus size={14} /> Buat & Mulai Langkah 1 →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

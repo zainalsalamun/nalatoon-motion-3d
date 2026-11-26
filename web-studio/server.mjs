@@ -11,6 +11,7 @@ const OUT_ROOT = path.join(PROJECT_ROOT, "out");
 const VOICES_DIR = path.join(OUT_ROOT, "studio_voices");
 const RENDERS_DIR = path.join(OUT_ROOT, "studio_renders");
 const PRESETS_FILE = path.join(__dirname, ".studio_presets.json");
+const PROJECTS_FILE = path.join(__dirname, ".studio_projects.json");
 
 fs.mkdirSync(VOICES_DIR, { recursive: true });
 fs.mkdirSync(RENDERS_DIR, { recursive: true });
@@ -632,6 +633,23 @@ export async function handleStudioRequest(req, res) {
       const body = await readJsonBody(req);
       fs.writeFileSync(PRESETS_FILE, JSON.stringify(body, null, 2), "utf-8");
       return sendJson(res, 200, { saved: true });
+    }
+
+    if (req.method === "GET" && pathname === "/api/projects") {
+      if (!fs.existsSync(PROJECTS_FILE)) return sendJson(res, 200, { projects: [] });
+      try {
+        const list = JSON.parse(fs.readFileSync(PROJECTS_FILE, "utf-8"));
+        return sendJson(res, 200, { projects: Array.isArray(list) ? list : [] });
+      } catch {
+        return sendJson(res, 200, { projects: [] });
+      }
+    }
+
+    if (req.method === "POST" && pathname === "/api/projects") {
+      const body = await readJsonBody(req);
+      const list = Array.isArray(body.projects) ? body.projects : [];
+      fs.writeFileSync(PROJECTS_FILE, JSON.stringify(list, null, 2), "utf-8");
+      return sendJson(res, 200, { saved: true, count: list.length });
     }
 
     if (req.method === "GET" && pathname === "/api/voices") {

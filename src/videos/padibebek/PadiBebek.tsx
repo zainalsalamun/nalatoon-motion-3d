@@ -106,8 +106,8 @@ const ShotView: React.FC<{
 }> = ({ id, alpha, board, exposure, lite }) => (
   <AbsoluteFill style={{ opacity: alpha }}>
     <ThreeCanvas
-      width={lite ? 540 : 1080}
-      height={lite ? 960 : 1920}
+      width={1080}
+      height={1920}
       dpr={lite ? 1 : undefined}
       shadows={lite ? false : "percentage"}
       gl={{
@@ -117,7 +117,6 @@ const ShotView: React.FC<{
         toneMappingExposure: exposure ?? 1.06,
       }}
       camera={{ fov: 42, near: 0.2, far: 1200 }}
-      style={lite ? { width: "100%", height: "100%" } : undefined}
     >
       <Inner id={id} board={board} exposure={exposure} lite={lite} />
     </ThreeCanvas>
