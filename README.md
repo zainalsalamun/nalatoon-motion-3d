@@ -9,6 +9,20 @@ Proyek terpadu untuk memproduksi video **3D Diorama Motion Graphics vertikal (9:
 
 ---
 
+## Preview Hasil Render (3D Diorama 9:16)
+
+### Episode 1 — Sistem Padi-Bebek / Aigamo (`PadiBebekShort`)
+| Konfrontasi Karakter 3D | Infografis Papan 3D Diegetik | Selebrasi Sawah & Bebek 3D |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/padibebek_confront.jpg" width="240" alt="Padi Bebek Confront" /> | <img src="docs/screenshots/padibebek_board.jpg" width="240" alt="Padi Bebek Board" /> | <img src="docs/screenshots/padibebek_payoff.jpg" width="240" alt="Padi Bebek Payoff" /> |
+
+### Episode 2 — Sistem Mina Padi Ikan Mas (`MinaPadiShort`)
+| Hook Ikan Mas 3D di Sawah | Infografis Papan 3D Diegetik | Panen Beras Organik + Ikan |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/minapadi_hook.jpg" width="240" alt="Mina Padi Hook" /> | <img src="docs/screenshots/minapadi_board.jpg" width="240" alt="Mina Padi Board" /> | <img src="docs/screenshots/minapadi_harvest.jpg" width="240" alt="Mina Padi Harvest" /> |
+
+---
+
 ## Prasyarat
 
 | Kebutuhan | Versi / Catatan |
