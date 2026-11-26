@@ -9,12 +9,12 @@
     "lint:slop": "node scripts/lint-antislop.mjs",
     "studio": "remotion studio",
     "typecheck": "tsc --noEmit && tsc -p web-studio/tsconfig.json --noEmit",
-    "render:padibebek": "zsh scripts/render/render_short.sh PadiBebekShort",
-    "render:minapadi": "zsh scripts/render/render_short.sh MinaPadiShort",
-    "render:tambora": "zsh scripts/render/render_short.sh TamboraShort",
-    "render:pulaurun": "zsh scripts/render/render_short.sh PulauRunShort",
-    "render:jawa": "zsh scripts/render/render_short.sh JawaShort",
-    "render:bahasajawa": "zsh scripts/render/render_short.sh BahasaJawaShort"
+    "render:padibebek": "node scripts/render/render_short.mjs PadiBebekShort",
+    "render:minapadi": "node scripts/render/render_short.mjs MinaPadiShort",
+    "render:tambora": "node scripts/render/render_short.mjs TamboraShort",
+    "render:pulaurun": "node scripts/render/render_short.mjs PulauRunShort",
+    "render:jawa": "node scripts/render/render_short.mjs JawaShort",
+    "render:bahasajawa": "node scripts/render/render_short.mjs BahasaJawaShort"
   },
   "dependencies": {
     "@react-three/fiber": "8.17.10",

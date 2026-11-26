@@ -34,16 +34,23 @@ function firstExisting(candidates) {
 
 function resolveEnvConfig() {
   const scratchDir = path.resolve(PROJECT_ROOT, "..");
+  const isWin = process.platform === "win32";
+  const venvPy = isWin
+    ? path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe")
+    : path.join(PROJECT_ROOT, ".venv", "bin", "python");
+
   const mlxPython = firstExisting([
     process.env.MLX_PYTHON,
-    path.join(PROJECT_ROOT, ".venv", "bin", "python"),
+    venvPy,
     path.join(scratchDir, "mlx_voice_venv", "bin", "python"),
   ]);
   const ytPython = firstExisting([
     process.env.YT_PYTHON,
-    path.join(PROJECT_ROOT, ".venv", "bin", "python"),
+    venvPy,
     path.join(scratchDir, "yt_uploader_venv", "bin", "python"),
   ]);
+  const genericPython = ytPython || mlxPython || (isWin ? "python" : "python3");
+
   const ytToken = firstExisting([
     process.env.YOUTUBE_TOKEN_FILE,
     path.join(PROJECT_ROOT, "secrets", "youtube_token.json"),
@@ -72,22 +79,40 @@ function resolveEnvConfig() {
     path.join(scratchDir, "cartoon-3d-studio", "brand", "studio_voice_ref.txt"),
   ]);
 
-  const compositorDir = path.join(PROJECT_ROOT, "node_modules", "@remotion", "compositor-darwin-arm64");
-  const ffmpegBin = firstExisting([
-    path.join(compositorDir, "ffmpeg"),
-    "/opt/homebrew/bin/ffmpeg",
-    "/usr/local/bin/ffmpeg",
-  ]);
+  const compositorPackages = [
+    "compositor-darwin-arm64",
+    "compositor-darwin-x64",
+    "compositor-win32-x64-msvc",
+    "compositor-linux-x64-gnu",
+    "compositor-linux-arm64-gnu",
+  ];
+  const compositorDir =
+    compositorPackages
+      .map((pkg) => path.join(PROJECT_ROOT, "node_modules", "@remotion", pkg))
+      .find((dir) => fs.existsSync(dir)) || null;
+
+  const ffmpegName = isWin ? "ffmpeg.exe" : "ffmpeg";
+  const ffmpegBin =
+    firstExisting([
+      compositorDir ? path.join(compositorDir, ffmpegName) : null,
+      "/opt/homebrew/bin/ffmpeg",
+      "/usr/local/bin/ffmpeg",
+      "/usr/bin/ffmpeg",
+    ]) || ffmpegName;
 
   return {
+    platform: process.platform,
+    arch: process.arch,
+    isAppleSilicon: process.platform === "darwin" && process.arch === "arm64",
     mlxPython,
     ytPython,
+    genericPython,
     ytToken,
     ytClientSecret,
     queueDir,
     refAudio,
     refText,
-    compositorDir: fs.existsSync(compositorDir) ? compositorDir : null,
+    compositorDir,
     ffmpegBin,
     remotionCli: path.join(PROJECT_ROOT, "node_modules", "@remotion", "cli", "remotion-cli.js"),
   };
@@ -301,20 +326,32 @@ function listYoutubeQueue(queueDir) {
 
 function startVoiceJob(payload) {
   const cfg = resolveEnvConfig();
-  const job = createJob("voice", `Generate Voice (${payload.mode === "clone" ? "Base Clone" : "VoiceDesign 1.7B"})`);
+  const mode = payload.mode === "clone" ? "clone" : payload.mode === "edge" ? "edge" : "design";
+  const modeLabel = mode === "edge" ? "Edge TTS (All OS)" : mode === "clone" ? "Base Clone (MLX)" : "VoiceDesign 1.7B (MLX)";
+  const job = createJob("voice", `Generate Voice (${modeLabel})`);
 
-  if (!cfg.mlxPython) {
-    job.status = "failed";
-    job.error = "Python environment dengan mlx-audio tidak ditemukan. Install via: pip install -r requirements.txt";
-    job.finishedAt = new Date().toISOString();
-    return job;
-  }
-
-  const mode = payload.mode === "clone" ? "clone" : "design";
   const text = String(payload.text || "").trim();
   if (!text) {
     job.status = "failed";
     job.error = "Teks narasi tidak boleh kosong.";
+    job.finishedAt = new Date().toISOString();
+    return job;
+  }
+
+  const pyBin = mode === "edge" ? cfg.genericPython : cfg.mlxPython;
+  if (!pyBin) {
+    job.status = "failed";
+    job.error =
+      mode === "edge"
+        ? "Python 3 tidak ditemukan. Install Python 3.11+ lalu jalankan: pip install -r requirements.txt"
+        : "Mode MLX membutuhkan macOS Apple Silicon + mlx-audio (pip install -r requirements-mac-mlx.txt). Di Windows/Linux/Intel Mac, pilih mode Edge TTS.";
+    job.finishedAt = new Date().toISOString();
+    return job;
+  }
+
+  if (mode === "clone" && (!cfg.refAudio || !cfg.refText)) {
+    job.status = "failed";
+    job.error = "File referensi suara (voice_ref.wav / voice_ref.txt) tidak ditemukan. Gunakan VoiceDesign 1.7B atau Edge TTS.";
     job.finishedAt = new Date().toISOString();
     return job;
   }
@@ -328,90 +365,36 @@ function startVoiceJob(payload) {
     "A relaxed, confident 30-year-old Indonesian male explainer voice with a warm medium-low pitch. Speaks naturally like a smart friend explaining an interesting fact in a YouTube video. Smooth conversational flow, steady brisk pace, gentle natural pitch inflection on questions, clean close-mic studio sound.";
   const temperature = Math.min(1.2, Math.max(0.4, Number(payload.temperature ?? 0.85)));
 
-  const pyScript = `
-import os, sys, json, numpy as np, soundfile as sf
-from mlx_audio.tts.utils import load_model
-from mlx_audio.utils import load_audio
-
-cfg = json.loads(os.environ["STUDIO_TTS_PAYLOAD"])
-mode = cfg["mode"]
-out_path = cfg["out_path"]
-text = cfg["text"]
-temp = float(cfg["temperature"])
-
-def trim_tighten(wav, sr, max_gap_s=0.17, thresh=0.012):
-    if wav.ndim > 1:
-        wav = wav.mean(axis=-1)
-    wav = wav.astype(np.float32)
-    win = max(1, int(sr * 0.015))
-    rms = np.sqrt(np.convolve(wav ** 2, np.ones(win) / win, mode="same") + 1e-12)
-    idx = np.where(rms > thresh)[0]
-    if len(idx) > 0:
-        pad = int(sr * 0.03)
-        wav = wav[max(0, idx[0] - pad) : min(len(wav), idx[-1] + pad)]
-    hop = int(sr * 0.01)
-    max_sil = int(max_gap_s / 0.01)
-    n_frames = len(wav) // hop
-    chunks, sil = [], 0
-    for i in range(n_frames):
-        fr = wav[i * hop : (i + 1) * hop]
-        if float(np.sqrt(np.mean(fr ** 2) + 1e-12)) < thresh:
-            sil += 1
-            if sil <= max_sil:
-                chunks.append(fr)
-        else:
-            sil = 0
-            chunks.append(fr)
-    if len(wav[n_frames * hop :]) > 0:
-        chunks.append(wav[n_frames * hop :])
-    out = np.concatenate(chunks) if chunks else wav
-    peak = np.max(np.abs(out)) + 1e-9
-    return (out / peak * 0.92).astype(np.float32)
-
-if mode == "design":
-    model_id = os.environ.get("MLX_TTS_MODEL", "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit")
-    print(f"Loading {model_id} (15%)...", flush=True)
-    model = load_model(model_id)
-    print("Synthesizing Indonesian voiceover (55%)...", flush=True)
-    res = list(model.generate_voice_design(text=text, instruct=cfg["instruct"], language="auto", temperature=temp, top_p=0.92))
-else:
-    model_id = "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit"
-    print(f"Loading {model_id} (15%)...", flush=True)
-    model = load_model(model_id)
-    ref_audio = load_audio(cfg["ref_audio"], sample_rate=model.sample_rate)
-    ref_text = open(cfg["ref_text"], "r", encoding="utf-8").read().strip()
-    print("Cloning voice from studio reference (55%)...", flush=True)
-    res = list(model.generate(text=text, ref_audio=ref_audio, ref_text=ref_text, lang_code="Indonesian", temperature=temp, top_p=0.95))
-
-wav = np.concatenate([np.array(r.audio, dtype=np.float32) for r in res], axis=0)
-wav = trim_tighten(wav, model.sample_rate, max_gap_s=0.17)
-sf.write(out_path, wav, model.sample_rate)
-print(f"Voice saved ({len(wav)/model.sample_rate:.2f}s) -> {out_path} (100%)", flush=True)
-`;
-
-  if (mode === "clone" && (!cfg.refAudio || !cfg.refText)) {
-    job.status = "failed";
-    job.error = "File referensi suara (voice_ref.wav / voice_ref.txt) tidak ditemukan. Gunakan mode VoiceDesign 1.7B atau set MLX_REF_AUDIO di .env.";
-    job.finishedAt = new Date().toISOString();
-    return job;
+  const scriptPath = path.join(PROJECT_ROOT, "scripts", "audio", "generate_voice.py");
+  const args = [
+    scriptPath,
+    "--mode",
+    mode,
+    "--text",
+    text,
+    "--out",
+    outPath,
+    "--instruct",
+    instruct,
+    "--temperature",
+    String(temperature),
+    "--ffmpeg",
+    cfg.ffmpegBin,
+  ];
+  if (mode === "clone") {
+    args.push("--ref-audio", cfg.refAudio, "--ref-text", cfg.refText);
+  }
+  if (payload.edgeVoice) {
+    args.push("--edge-voice", String(payload.edgeVoice));
   }
 
-  appendLog(job, `Memulai Qwen3-TTS (${mode})...`);
-  const child = spawn(cfg.mlxPython, ["-c", pyScript], {
-    cwd: PROJECT_ROOT,
-    env: {
-      ...process.env,
-      STUDIO_TTS_PAYLOAD: JSON.stringify({
-        mode,
-        text,
-        instruct,
-        temperature,
-        out_path: outPath,
-        ref_audio: cfg.refAudio,
-        ref_text: cfg.refText,
-      }),
-    },
-  });
+  const env = { ...process.env };
+  if (cfg.compositorDir && process.platform === "darwin") {
+    env.DYLD_LIBRARY_PATH = cfg.compositorDir;
+  }
+
+  appendLog(job, `Memulai voiceover (${modeLabel})...`);
+  const child = spawn(pyBin, args, { cwd: PROJECT_ROOT, env });
 
   child.stdout.on("data", (d) => appendLog(job, d));
   child.stderr.on("data", (d) => appendLog(job, d));
@@ -463,6 +446,7 @@ function startRenderJob(payload) {
 
   fs.writeFileSync(propsPath, JSON.stringify(payload.props || {}, null, 2), "utf-8");
 
+  const glBackend = payload.gl === "swiftshader" ? "swiftshader" : process.env.REMOTION_GL || "angle";
   const args = [
     cfg.remotionCli,
     "render",
@@ -471,7 +455,7 @@ function startRenderJob(payload) {
     `--props=${propsPath}`,
     `--concurrency=${concurrency}`,
     `--crf=${crf}`,
-    "--gl=angle",
+    `--gl=${glBackend}`,
     "--timeout=120000",
   ];
   if (payload.frameRange && /^\d+-\d+$/.test(String(payload.frameRange))) {

@@ -100,15 +100,17 @@ export const App: React.FC = () => {
   const [viewportActive, setViewportActive] = useState<boolean>(true);
   const [debouncedBoard, setDebouncedBoard] = useState<BoardConfig | undefined>(EPISODES[0].defaultBoard);
 
-  const [voiceMode, setVoiceMode] = useState<"design" | "clone">("design");
+  const [voiceMode, setVoiceMode] = useState<"design" | "clone" | "edge">("design");
   const [voiceScript, setVoiceScript] = useState<string>(EPISODES[0].defaultScript);
   const [voiceInstruct, setVoiceInstruct] = useState<string>(DEFAULT_INSTRUCT);
   const [voiceTemp, setVoiceTemp] = useState<number>(0.85);
+  const [edgeVoice, setEdgeVoice] = useState<string>("id-ID-ArdiNeural");
   const [voices, setVoices] = useState<MediaFile[]>([]);
   const [selectedVoiceFile, setSelectedVoiceFile] = useState<string>("");
 
   const [renderCrf, setRenderCrf] = useState<number>(18);
   const [renderConcurrency, setRenderConcurrency] = useState<number>(2);
+  const [renderGl, setRenderGl] = useState<"angle" | "swiftshader">("angle");
   const [frameRange, setFrameRange] = useState<string>("");
   const [renders, setRenders] = useState<MediaFile[]>([]);
 
@@ -289,6 +291,7 @@ export const App: React.FC = () => {
           text: voiceScript,
           instruct: voiceInstruct,
           temperature: voiceTemp,
+          edgeVoice,
           label: episode.id,
         }),
       });
@@ -311,6 +314,7 @@ export const App: React.FC = () => {
           compositionId: episode.id,
           crf: renderCrf,
           concurrency: renderConcurrency,
+          gl: renderGl,
           frameRange: frameRange.trim() || undefined,
           voiceFile: selectedVoiceFile || undefined,
           props: renderExportProps,
@@ -795,22 +799,44 @@ export const App: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="segmented" role="group" aria-label="Mode Voice TTS">
+                  <div className="segmented segmented-3" role="group" aria-label="Mode Voice TTS">
                     <button
                       type="button"
                       className={`seg-btn ${voiceMode === "design" ? "active" : ""}`}
                       onClick={() => setVoiceMode("design")}
                     >
-                      VoiceDesign 1.7B
+                      Qwen3 1.7B (Mac)
                     </button>
                     <button
                       type="button"
                       className={`seg-btn ${voiceMode === "clone" ? "active" : ""}`}
                       onClick={() => setVoiceMode("clone")}
                     >
-                      Voice Cloning
+                      Clone (Mac)
+                    </button>
+                    <button
+                      type="button"
+                      className={`seg-btn ${voiceMode === "edge" ? "active" : ""}`}
+                      onClick={() => setVoiceMode("edge")}
+                    >
+                      Edge TTS (All OS)
                     </button>
                   </div>
+
+                  {voiceMode === "edge" && (
+                    <div className="field">
+                      <label htmlFor="edge-voice">Suara Neural Indonesia (Windows / Linux / Mac)</label>
+                      <select
+                        id="edge-voice"
+                        className="select"
+                        value={edgeVoice}
+                        onChange={(e) => setEdgeVoice(e.target.value)}
+                      >
+                        <option value="id-ID-ArdiNeural">Ardi (Pria Indonesia)</option>
+                        <option value="id-ID-GadisNeural">Gadis (Wanita Indonesia)</option>
+                      </select>
+                    </div>
+                  )}
 
                   <div className="field">
                     <label htmlFor="voice-script">Naskah Bahasa Indonesia</label>
@@ -940,6 +966,19 @@ export const App: React.FC = () => {
                         <option value={3}>3 — Cepat</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="gl-select">WebGL Renderer</label>
+                    <select
+                      id="gl-select"
+                      className="select"
+                      value={renderGl}
+                      onChange={(e) => setRenderGl(e.target.value as "angle" | "swiftshader")}
+                    >
+                      <option value="angle">ANGLE — GPU Hardware (Mac / Windows / Linux Desktop)</option>
+                      <option value="swiftshader">SwiftShader — CPU Fallback (VPS / Tanpa GPU)</option>
+                    </select>
                   </div>
 
                   <div className="field">

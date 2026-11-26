@@ -1,5 +1,5 @@
-# Audio & Local Apple Silicon TTS (optional, macOS Apple Silicon)
-mlx-audio
+# Cross-Platform Python Dependencies (Windows, Linux, macOS Intel & Apple Silicon)
+edge-tts
 soundfile
 numpy
 scipy

@@ -675,6 +675,10 @@ input[type="checkbox"] {
   background: var(--recess);
 }
 
+.segmented-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .seg-btn {
   border: none;
   background: transparent;

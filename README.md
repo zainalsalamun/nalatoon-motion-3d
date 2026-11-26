@@ -23,35 +23,57 @@ Proyek terpadu untuk memproduksi video **3D Diorama Motion Graphics vertikal (9:
 
 ---
 
-## Prasyarat
+## Prasyarat & Kompatibilitas OS
 
-| Kebutuhan | Versi / Catatan |
-| :--- | :--- |
-| **Node.js & npm** | Node.js 18+ (wajib untuk Remotion & render 3D) |
-| **Python** | Python 3.11+ (opsional, untuk TTS lokal & YouTube uploader) |
-| **macOS Apple Silicon** | M1/M2/M3/M4 (opsional, khusus `mlx-audio` GPU & script Swift) |
-| **FFmpeg** | Sudah ikut terpasang via `@remotion/compositor` saat `npm install` (atau `brew install ffmpeg`) |
+Proyek ini mendukung **macOS (Apple Silicon & Intel), Windows 10/11, dan Linux/VPS**:
+
+| Komponen | macOS Apple Silicon (M1–M4) | Windows 10/11 | Linux / VPS | Intel Mac |
+| :--- | :---: | :---: | :---: | :---: |
+| **Web Studio UI (`npm run ui`)** | ✅ Penuh | ✅ Penuh | ✅ Penuh | ✅ Penuh |
+| **Render 3D MP4 (`npm run render:*`)** | ✅ GPU (`angle`) | ✅ GPU (`angle`) | ✅ GPU / CPU (`swiftshader`) | ✅ GPU (`angle`) |
+| **YouTube Auto-Uploader** | ✅ Penuh | ✅ Penuh | ✅ Penuh | ✅ Penuh |
+| **Voiceover AI (`Edge TTS`)** | ✅ Gratis | ✅ Gratis | ✅ Gratis | ✅ Gratis |
+| **Voiceover Lokal GPU (`Qwen3-TTS MLX`)** | ✅ Offline GPU | ⚠️ Gunakan `Edge TTS` | ⚠️ Gunakan `Edge TTS` | ⚠️ Gunakan `Edge TTS` |
+
+### Spesifikasi Hardware Minimum
+- **Node.js & npm**: Node.js 18+ (wajib untuk Web UI & render 3D Remotion)
+- **Python**: Python 3.11+ (opsional, untuk Voiceover AI & YouTube auto-uploader)
+- **RAM**: Minimal **8 GB** (aktifkan mode `LITE` di Web UI dan `REMOTION_CONCURRENCY=1` saat render); **16 GB+** direkomendasikan
+- **GPU**: GPU terintegrasi (*Intel / AMD / Apple Silicon / NVIDIA*) cukup; di VPS Linux tanpa GPU gunakan `REMOTION_GL=swiftshader`
+- **FFmpeg**: Otomatis ikut terpasang via `@remotion/compositor` saat `npm install` (atau install sistem via `brew` / `winget` / `apt`)
 
 ---
 
 ## 1. Instalasi Awal
 
-### A. Clone & Install Dependencies Node.js
+### A. Clone & Install Dependencies Node.js (macOS / Windows / Linux)
 ```bash
 git clone <URL_REPO_KAMU>
 cd nalatoon-motion-3d
 npm install
 ```
 
-### B. Cek TypeScript (Opsional, untuk memastikan semua scene valid)
+### B. Cek TypeScript & Anti-AI-Slop Linter (Opsional)
 ```bash
 npm run typecheck
+npm run lint:slop
 ```
 
-### C. Install Dependencies Python (Opsional: untuk TTS & YouTube Uploader)
+### C. Install Dependencies Python (Opsional: Voiceover & YouTube Uploader)
+**macOS / Linux:**
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt
+
+# Tambahan khusus macOS Apple Silicon (M1-M4) untuk Qwen3-TTS lokal offline:
+pip install -r requirements-mac-mlx.txt
+```
+
+**Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
@@ -120,11 +142,14 @@ npm run render:minapadi
 ```
 Hasil video mentah akan tersimpan di folder `./out/<CompositionId>.mp4`.
 
-### Menggunakan Script Generik (Custom Output / Performance)
+### Menggunakan Script Generik Lintas OS (macOS / Windows / Linux)
 ```bash
-# Format: zsh scripts/render/render_short.sh <CompositionId> [path_output.mp4]
-REMOTION_CONCURRENCY=2 REMOTION_CRF=18 \
-  zsh scripts/render/render_short.sh MinaPadiShort ./out/minapadi.mp4
+# Format: node scripts/render/render_short.mjs <CompositionId> [path_output.mp4]
+node scripts/render/render_short.mjs MinaPadiShort ./out/minapadi.mp4
+
+# Untuk VPS Linux tanpa GPU (CPU SwiftShader) atau laptop RAM 8GB:
+REMOTION_CONCURRENCY=1 REMOTION_GL=swiftshader \
+  node scripts/render/render_short.mjs MinaPadiShort ./out/minapadi.mp4
 ```
 
 - `REMOTION_CONCURRENCY`: jumlah tab Chromium paralel (disarankan `2` agar RAM/GPU stabil).
