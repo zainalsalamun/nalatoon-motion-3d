@@ -324,6 +324,62 @@ textarea:focus-visible {
   color: var(--ink);
 }
 
+.monitor-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mini-toggle {
+  border: 1px solid var(--border-hi);
+  background: var(--recess);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.mini-toggle:hover {
+  border-color: var(--vermilion);
+  color: var(--ink);
+}
+
+.mini-toggle.active {
+  border-color: var(--vermilion);
+  background: var(--vermilion-tint);
+  color: var(--vermilion-hi);
+}
+
+.sleep-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: var(--ink-muted);
+  background: var(--recess);
+}
+
+.sleep-screen strong {
+  font-family: var(--font-display);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.sleep-screen span {
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 220px;
+}
+
 .monitor-viewport {
   position: relative;
   height: min(65vh, 610px);

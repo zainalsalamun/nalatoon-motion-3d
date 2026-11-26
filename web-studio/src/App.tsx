@@ -96,6 +96,9 @@ export const App: React.FC = () => {
   const [subtitleAccent, setSubtitleAccent] = useState<boolean>(false);
   const [showWatermark, setShowWatermark] = useState<boolean>(true);
   const [watermarkText, setWatermarkText] = useState<string>("Powered by Naltech");
+  const [previewMode, setPreviewMode] = useState<"lite" | "hd">("lite");
+  const [viewportActive, setViewportActive] = useState<boolean>(true);
+  const [debouncedBoard, setDebouncedBoard] = useState<BoardConfig | undefined>(EPISODES[0].defaultBoard);
 
   const [voiceMode, setVoiceMode] = useState<"design" | "clone">("design");
   const [voiceScript, setVoiceScript] = useState<string>(EPISODES[0].defaultScript);
@@ -192,6 +195,12 @@ export const App: React.FC = () => {
 
   const currentBoard: BoardConfig | undefined = boardByEp[episode.id] || episode.defaultBoard;
 
+  // Debounce 3D canvas texture rebuilds while typing to avoid allocating textures on every keystroke
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedBoard(currentBoard), 180);
+    return () => window.clearTimeout(t);
+  }, [currentBoard]);
+
   const updateBoardField = <K extends keyof BoardConfig>(key: K, value: BoardConfig[K]) => {
     if (!currentBoard) return;
     setBoardByEp((prev) => ({
@@ -212,12 +221,35 @@ export const App: React.FC = () => {
 
   const sceneInputProps: StudioSceneProps = useMemo(
     () => ({
+      board: episode.supportsBoardEditor ? debouncedBoard : undefined,
+      exposure,
+      subtitleText,
+      subtitleAccent,
+      showWatermark,
+      watermarkText,
+      previewMode,
+    }),
+    [
+      episode.supportsBoardEditor,
+      debouncedBoard,
+      exposure,
+      subtitleText,
+      subtitleAccent,
+      showWatermark,
+      watermarkText,
+      previewMode,
+    ],
+  );
+
+  const renderExportProps: StudioSceneProps = useMemo(
+    () => ({
       board: episode.supportsBoardEditor ? currentBoard : undefined,
       exposure,
       subtitleText,
       subtitleAccent,
       showWatermark,
       watermarkText,
+      previewMode: "hd",
     }),
     [episode.supportsBoardEditor, currentBoard, exposure, subtitleText, subtitleAccent, showWatermark, watermarkText],
   );
@@ -281,7 +313,7 @@ export const App: React.FC = () => {
           concurrency: renderConcurrency,
           frameRange: frameRange.trim() || undefined,
           voiceFile: selectedVoiceFile || undefined,
-          props: sceneInputProps,
+          props: renderExportProps,
         }),
       });
       const job: StudioJob = await res.json();
@@ -432,25 +464,53 @@ export const App: React.FC = () => {
           <div className="monitor-housing">
             <div className="monitor-strip">
               <span className="monitor-rec">
-                <span className="led-dot rec" />
-                MONITOR 9:16
+                <span className={`led-dot ${viewportActive ? "rec" : ""}`} />
+                {viewportActive ? `MONITOR 9:16 (${previewMode.toUpperCase()})` : "3D SLEEP (0 MB VRAM)"}
               </span>
-              <span>{episode.id.toUpperCase()}</span>
+              <div className="monitor-actions">
+                <button
+                  type="button"
+                  className={`mini-toggle ${previewMode === "lite" ? "active" : ""}`}
+                  title="Mode ringan 540p tanpa bokeh untuk hemat RAM (Render MP4 tetap 100% HD)"
+                  onClick={() => setPreviewMode((m) => (m === "lite" ? "hd" : "lite"))}
+                >
+                  {previewMode === "lite" ? "LITE" : "FULL HD"}
+                </button>
+                <button
+                  type="button"
+                  className={`mini-toggle ${!viewportActive ? "active" : ""}`}
+                  title="Matikan kanvas 3D sementara agar RAM langsung lega"
+                  onClick={() => setViewportActive((v) => !v)}
+                >
+                  {viewportActive ? "SLEEP 3D" : "WAKE 3D"}
+                </button>
+              </div>
             </div>
             <div className="monitor-viewport">
-              <Player
-                key={episode.id}
-                ref={playerRef}
-                component={episode.component}
-                inputProps={sceneInputProps}
-                durationInFrames={episode.durationInFrames}
-                compositionWidth={1080}
-                compositionHeight={1920}
-                fps={episode.fps}
-                controls
-                loop
-                style={{ width: "100%", height: "100%" }}
-              />
+              {viewportActive ? (
+                <Player
+                  key={`${episode.id}_${previewMode}`}
+                  ref={playerRef}
+                  component={episode.component}
+                  inputProps={sceneInputProps}
+                  durationInFrames={episode.durationInFrames}
+                  compositionWidth={1080}
+                  compositionHeight={1920}
+                  fps={episode.fps}
+                  controls
+                  loop
+                  style={{ width: "100%", height: "100%" }}
+                />
+              ) : (
+                <div className="sleep-screen">
+                  <Clapperboard size={28} />
+                  <strong>Preview 3D dalam mode Sleep</strong>
+                  <span>Memori WebGL dilepas total. Klik tombol di bawah untuk mengaktifkan kembali.</span>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => setViewportActive(true)}>
+                    <Play size={12} /> Aktifkan Preview 3D
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

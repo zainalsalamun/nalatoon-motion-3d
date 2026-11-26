@@ -292,14 +292,14 @@ export class PadiBebekWorld {
   private budi: DioramaCharacter;
   private darto: DioramaCharacter;
 
-  constructor(board?: Partial<BoardConfig>) {
+  constructor(board?: Partial<BoardConfig>, lite = false) {
     // 1. Warm Soft Blender-Style Daylight Rig!
     this.hemi = new THREE.HemisphereLight("#cbe3ff", "#7a8559", 1.35);
     this.root.add(this.hemi);
 
     this.sun = new THREE.DirectionalLight("#fff3dc", 2.55);
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.castShadow = !lite;
+    this.sun.shadow.mapSize.set(lite ? 512 : 2048, lite ? 512 : 2048);
     this.sun.shadow.camera.near = 1;
     this.sun.shadow.camera.far = 140;
     const d = 28;
@@ -533,6 +533,20 @@ export class PadiBebekWorld {
     this.boardMat.map = makeDiegeticBoardTex(board);
     this.boardMat.needsUpdate = true;
     if (prev) prev.dispose();
+  }
+
+  dispose() {
+    this.root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+      for (const m of mats) {
+        const std = m as THREE.MeshStandardMaterial;
+        if (std.map) std.map.dispose();
+        if (std.bumpMap) std.bumpMap.dispose();
+        m.dispose();
+      }
+    });
   }
 
   private buildIndonesianVillage() {

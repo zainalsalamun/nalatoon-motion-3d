@@ -16,6 +16,7 @@ export interface StudioSceneProps {
   subtitleAccent?: boolean;
   showWatermark?: boolean;
   watermarkText?: string;
+  previewMode?: "lite" | "hd";
 }
 
 export const DEFAULT_PADI_BEBEK_BOARD: BoardConfig = {

@@ -31,11 +31,18 @@ const makeBloom = () => {
 
 const fwd = new THREE.Vector3();
 
-const Inner: React.FC<{ id: number; board?: Partial<BoardConfig>; exposure?: number }> = ({ id, board, exposure }) => {
+const Inner: React.FC<{ id: number; board?: Partial<BoardConfig>; exposure?: number; lite: boolean }> = ({
+  id,
+  board,
+  exposure,
+  lite,
+}) => {
   const f = useCurrentFrame();
   const { camera, scene, gl } = useThree();
-  const world = useMemo(() => new PadiBebekWorld(board), []);
+  const world = useMemo(() => new PadiBebekWorld(board, lite), [lite]);
   const target = useMemo(() => new THREE.Vector3(), []);
+
+  useEffect(() => () => world.dispose(), [world]);
 
   const boardKey = JSON.stringify(board || null);
   useEffect(() => {
@@ -43,31 +50,44 @@ const Inner: React.FC<{ id: number; board?: Partial<BoardConfig>; exposure?: num
   }, [world, boardKey]);
 
   useEffect(() => {
+    gl.toneMapping = lite ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     gl.toneMappingExposure = exposure ?? 1.06;
-  }, [gl, exposure]);
+  }, [gl, exposure, lite]);
 
-  const fx = useMemo(() => ({
-    lens: new LensBlur({ maxCoC: 24, nearScale: 1.15 }),
-    bloom: makeBloom(),
-    tone: new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }),
-  }), []);
+  const fx = useMemo(
+    () =>
+      lite
+        ? null
+        : {
+            lens: new LensBlur({ maxCoC: 24, nearScale: 1.15 }),
+            bloom: makeBloom(),
+            tone: new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }),
+          },
+    [lite],
+  );
 
-  const post = useMemo(() => (
-    <EffectComposer multisampling={4}>
-      <primitive object={fx.lens.pre} dispose={null} />
-      <primitive object={fx.lens.main} dispose={null} />
-      <primitive object={fx.bloom} dispose={null} />
-      <primitive object={fx.tone} dispose={null} />
-    </EffectComposer>
-  ), [fx]);
+  const post = useMemo(
+    () =>
+      fx ? (
+        <EffectComposer multisampling={4}>
+          <primitive object={fx.lens.pre} dispose={null} />
+          <primitive object={fx.lens.main} dispose={null} />
+          <primitive object={fx.bloom} dispose={null} />
+          <primitive object={fx.tone} dispose={null} />
+        </EffectComposer>
+      ) : null,
+    [fx],
+  );
 
   const cam = camera as THREE.PerspectiveCamera;
   target.copy(world.update(id, f, cam, scene));
 
-  const d = dofAt(f);
-  cam.getWorldDirection(fwd);
-  fx.lens.focus = Math.max(0.5, target.clone().sub(cam.position).dot(fwd));
-  fx.lens.cInf = d.cInf;
+  if (fx) {
+    const d = dofAt(f);
+    cam.getWorldDirection(fwd);
+    fx.lens.focus = Math.max(0.5, target.clone().sub(cam.position).dot(fwd));
+    fx.lens.cInf = d.cInf;
+  }
 
   return (
     <>
@@ -77,31 +97,49 @@ const Inner: React.FC<{ id: number; board?: Partial<BoardConfig>; exposure?: num
   );
 };
 
-const ShotView: React.FC<{ id: number; alpha: number; board?: Partial<BoardConfig>; exposure?: number }> = ({
-  id,
-  alpha,
-  board,
-  exposure,
-}) => (
+const ShotView: React.FC<{
+  id: number;
+  alpha: number;
+  board?: Partial<BoardConfig>;
+  exposure?: number;
+  lite: boolean;
+}> = ({ id, alpha, board, exposure, lite }) => (
   <AbsoluteFill style={{ opacity: alpha }}>
     <ThreeCanvas
-      width={1080}
-      height={1920}
-      shadows="percentage"
-      gl={{ antialias: true, stencil: false, powerPreference: "high-performance", toneMappingExposure: exposure ?? 1.06 }}
+      width={lite ? 540 : 1080}
+      height={lite ? 960 : 1920}
+      dpr={lite ? 1 : undefined}
+      shadows={lite ? false : "percentage"}
+      gl={{
+        antialias: !lite,
+        stencil: false,
+        powerPreference: lite ? "low-power" : "high-performance",
+        toneMappingExposure: exposure ?? 1.06,
+      }}
       camera={{ fov: 42, near: 0.2, far: 1200 }}
+      style={lite ? { width: "100%", height: "100%" } : undefined}
     >
-      <Inner id={id} board={board} exposure={exposure} />
+      <Inner id={id} board={board} exposure={exposure} lite={lite} />
     </ThreeCanvas>
   </AbsoluteFill>
 );
 
 export const PadiBebekShort: React.FC<StudioSceneProps> = (props) => {
   const f = useCurrentFrame();
+  const lite = props.previewMode === "lite";
+  const layers = layersAt(f);
+  const visibleLayers = lite ? layers.slice(-1) : layers;
   return (
     <AbsoluteFill style={{ background: "#b7daf5" }}>
-      {layersAt(f).map((l, i) => (
-        <ShotView key={i ? "over" : "base"} id={l.id} alpha={l.alpha} board={props.board} exposure={props.exposure} />
+      {visibleLayers.map((l, i) => (
+        <ShotView
+          key={lite ? "lite-single" : i ? "over" : "base"}
+          id={l.id}
+          alpha={lite ? 1 : l.alpha}
+          board={props.board}
+          exposure={props.exposure}
+          lite={lite}
+        />
       ))}
       <StudioOverlay {...props} />
     </AbsoluteFill>
