@@ -81,6 +81,7 @@ Fitur di dalam Web UI:
 - **Tab Voice AI** — generate narasi Bahasa Indonesia lokal (mode *VoiceDesign 1.7B santai* atau *Voice Cloning*) dan langsung putar/unduh file `.wav`.
 - **Tab Render** — render MP4 dengan pilihan CRF/concurrency, optional muxing dengan audio voiceover, progress bar & log live, plus preview video hasil render.
 - **Tab YouTube** — verifikasi token OAuth, kirim hasil render ke folder antrean (`caption.txt` dibuat otomatis), dry-run jadwal, dan jadwalkan publish otomatis jam `19:00 WIB`.
+- **Anti-AI-Slop Design System & Linter** — mengikuti kontrak [web-studio/DESIGN.md](web-studio/DESIGN.md) (*Tactile Film & Diorama Console*, tanpa neon glow / card-in-card / ikon `Sparkles` / font generik) dan dijaga otomatis lewat `npm run lint:slop`.
 
 ---
 

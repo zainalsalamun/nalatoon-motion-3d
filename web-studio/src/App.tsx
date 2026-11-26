@@ -1,19 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
 import {
-  CheckCircle2,
+  Check,
   Clapperboard,
   Download,
   Film,
   Layers,
   Mic,
   Play,
+  Radio,
   RefreshCw,
   RotateCcw,
   Save,
   Send,
-  Sliders,
-  Sparkles,
+  SlidersHorizontal,
   UploadCloud,
   Volume2,
   Youtube,
@@ -57,6 +57,7 @@ interface StudioJob {
 
 interface QueueData {
   queueDir: string;
+  warning?: string;
   items: { name: string; mp4: string; sizeMB: number; title: string; hasCaption: boolean }[];
   history: {
     uploaded_at?: string;
@@ -83,7 +84,6 @@ export const App: React.FC = () => {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
 
-  // Per-episode live editor state
   const [boardByEp, setBoardByEp] = useState<Record<string, BoardConfig>>(() => {
     const init: Record<string, BoardConfig> = {};
     for (const ep of EPISODES) {
@@ -97,7 +97,6 @@ export const App: React.FC = () => {
   const [showWatermark, setShowWatermark] = useState<boolean>(true);
   const [watermarkText, setWatermarkText] = useState<string>("Powered by Naltech");
 
-  // Voice studio state
   const [voiceMode, setVoiceMode] = useState<"design" | "clone">("design");
   const [voiceScript, setVoiceScript] = useState<string>(EPISODES[0].defaultScript);
   const [voiceInstruct, setVoiceInstruct] = useState<string>(DEFAULT_INSTRUCT);
@@ -105,13 +104,11 @@ export const App: React.FC = () => {
   const [voices, setVoices] = useState<MediaFile[]>([]);
   const [selectedVoiceFile, setSelectedVoiceFile] = useState<string>("");
 
-  // Render state
   const [renderCrf, setRenderCrf] = useState<number>(18);
   const [renderConcurrency, setRenderConcurrency] = useState<number>(2);
   const [frameRange, setFrameRange] = useState<string>("");
   const [renders, setRenders] = useState<MediaFile[]>([]);
 
-  // YouTube state
   const [queueData, setQueueData] = useState<QueueData | null>(null);
   const [ytHour, setYtHour] = useState<number>(19);
   const [ytMinute, setYtMinute] = useState<number>(0);
@@ -119,7 +116,6 @@ export const App: React.FC = () => {
   const [enqueueTitle, setEnqueueTitle] = useState<string>("");
   const [enqueueDesc, setEnqueueDesc] = useState<string>("");
 
-  // Active background jobs
   const [activeJob, setActiveJob] = useState<StudioJob | null>(null);
 
   const showNotice = useCallback((kind: "ok" | "warn" | "error", text: string) => {
@@ -142,7 +138,7 @@ export const App: React.FC = () => {
       setRenders(rRes.files || []);
       setQueueData(qRes);
     } catch {
-      showNotice("warn", "API lokal (port 4177) belum tersambung. Jalankan lewat: npm run ui");
+      showNotice("warn", "API studio lokal tidak merespons. Jalankan lewat: npm run ui");
     }
   }, [showNotice]);
 
@@ -158,7 +154,6 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, [refreshLists]);
 
-  // Poll active background job
   useEffect(() => {
     if (!activeJob || activeJob.status !== "running") return;
     const timer = window.setInterval(async () => {
@@ -168,7 +163,7 @@ export const App: React.FC = () => {
         const updated: StudioJob = await res.json();
         setActiveJob(updated);
         if (updated.status === "done") {
-          showNotice("ok", `${updated.label} selesai!`);
+          showNotice("ok", `${updated.label} selesai.`);
           if (updated.type === "voice" && updated.outputFile) {
             setSelectedVoiceFile(updated.outputFile);
           }
@@ -180,7 +175,7 @@ export const App: React.FC = () => {
           showNotice("error", updated.error || `${updated.label} gagal.`);
         }
       } catch {
-        // retry next tick
+        // retry on next tick
       }
     }, 1200);
     return () => window.clearInterval(timer);
@@ -249,7 +244,7 @@ export const App: React.FC = () => {
     setBoardByEp((prev) => ({ ...prev, [episode.id]: { ...episode.defaultBoard! } }));
     setExposure(1.06);
     setSubtitleText(episode.defaultSubtitle);
-    showNotice("ok", "Reset ke pengaturan default episode.");
+    showNotice("ok", "Pengaturan dikembalikan ke default.");
   };
 
   const handleGenerateVoice = async () => {
@@ -349,14 +344,15 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-shell">
-      {/* Top Studio Navigation */}
+      {/* Hardware Console Top Bar */}
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">
-            <Clapperboard size={17} />
+            <Clapperboard size={15} />
           </div>
-          <span>Nalatoon 3D Studio</span>
-          <span className="brand-sub">LOCAL WEB APP</span>
+          <span>Nalatoon</span>
+          <span className="brand-divider">//</span>
+          <span className="brand-console">3D DIORAMA CONSOLE</span>
         </div>
 
         <div className="topbar-center">
@@ -366,24 +362,26 @@ export const App: React.FC = () => {
             value={episode.id}
             onChange={(e) => handleSelectEpisode(e.target.value)}
           >
-            {EPISODES.map((ep) => (
+            {EPISODES.map((ep, idx) => (
               <option key={ep.id} value={ep.id}>
-                {ep.name} ({ep.badge})
+                {String(idx + 1).padStart(2, "0")} — {ep.name}
               </option>
             ))}
           </select>
-          <span className="meta-pill">
-            1080×1920 · {episode.fps}fps · {durationSec}s
+          <span className="readout">
+            1080×1920 · {episode.fps}FPS · {durationSec}S
           </span>
         </div>
 
         <div className="topbar-right">
-          <div className="status-dots">
-            <span className={`cap-badge ${health?.capabilities.mlxTts ? "ok" : ""}`}>
-              <Mic size={11} /> Qwen3-TTS
+          <div className="led-group" aria-label="Status Koneksi Lokal">
+            <span className="led-item">
+              <span className={`led-dot ${health?.capabilities.mlxTts ? "on" : ""}`} />
+              TTS
             </span>
-            <span className={`cap-badge ${health?.capabilities.youtubeToken ? "ok" : ""}`}>
-              <Youtube size={11} /> YouTube API
+            <span className="led-item">
+              <span className={`led-dot ${health?.capabilities.youtubeToken ? "on" : ""}`} />
+              YT
             </span>
           </div>
           <button
@@ -392,43 +390,54 @@ export const App: React.FC = () => {
             onClick={handleStartRender}
             disabled={activeJob?.status === "running"}
           >
-            <Film size={14} /> Render MP4
+            <Film size={13} /> Render MP4
           </button>
         </div>
       </header>
 
       <div className="workspace">
-        {/* Left Sidebar: Episode Library */}
+        {/* Left Sidebar: Numbered Episode Reel */}
         <aside className="sidebar" aria-label="Daftar Episode 3D">
-          <div className="sidebar-header">Komposisi Episode ({EPISODES.length})</div>
+          <div className="sidebar-header">
+            <span>REEL KOMPOSISI</span>
+            <span>{String(EPISODES.length).padStart(2, "0")}</span>
+          </div>
           <div className="episode-list">
-            {EPISODES.map((ep) => (
+            {EPISODES.map((ep, idx) => (
               <button
                 key={ep.id}
                 type="button"
-                className={`episode-card ${ep.id === episode.id ? "active" : ""}`}
+                className={`episode-row ${ep.id === episode.id ? "active" : ""}`}
                 onClick={() => handleSelectEpisode(ep.id)}
               >
-                <div className="episode-card-title">{ep.name}</div>
-                <div className="episode-card-meta">
-                  <span className="episode-badge">{ep.badge}</span>
-                  <span>{(ep.durationInFrames / ep.fps).toFixed(0)}s</span>
-                </div>
+                <span className="episode-num">{String(idx + 1).padStart(2, "0")}</span>
+                <span>
+                  <span className="episode-row-title">{ep.name}</span>
+                  <span className="episode-row-kind">{ep.badge}</span>
+                </span>
+                <span className="episode-dur">{(ep.durationInFrames / ep.fps).toFixed(0)}s</span>
               </button>
             ))}
           </div>
         </aside>
 
-        {/* Center Stage: Live 3D Player */}
+        {/* Center Stage: Drafting-Grid Reference Monitor */}
         <main className="stage">
           {toast && (
-            <div className={`banner ${toast.kind === "warn" ? "warn" : toast.kind === "error" ? "error" : ""}`}>
+            <div className={`notice-strip ${toast.kind === "warn" ? "warn" : toast.kind === "error" ? "error" : ""}`}>
               {toast.text}
             </div>
           )}
 
-          <div className="phone-bezel">
-            <div className="phone-screen">
+          <div className="monitor-housing">
+            <div className="monitor-strip">
+              <span className="monitor-rec">
+                <span className="led-dot rec" />
+                MONITOR 9:16
+              </span>
+              <span>{episode.id.toUpperCase()}</span>
+            </div>
+            <div className="monitor-viewport">
               <Player
                 key={episode.id}
                 ref={playerRef}
@@ -445,28 +454,26 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="bookmark-bar" aria-label="Lompat cepat ke shot">
-            {episode.bookmarks.map((bm) => (
+          <div className="transport-bar" aria-label="Lompat cepat ke shot">
+            {episode.bookmarks.map((bm, i) => (
               <button
                 key={bm.label}
                 type="button"
-                className="bookmark-btn"
+                className="shot-key"
                 onClick={() => jumpToFrame(bm.frame)}
               >
-                <Play size={11} />
-                {bm.label}
+                <span className="shot-key-idx">{String(i + 1).padStart(2, "0")}</span>
+                <span>{bm.label}</span>
               </button>
             ))}
           </div>
 
-          <div className="stage-footer">
-            <span>{episode.description}</span>
-          </div>
+          <div className="stage-caption">{episode.description}</div>
         </main>
 
-        {/* Right Inspector: 4 Studio Tabs */}
+        {/* Right Architectural Inspector (Flat Sections, Zero Card Nesting) */}
         <aside className="inspector">
-          <div className="tabs" role="tablist" aria-label="Alat Studio">
+          <div className="tabs" role="tablist" aria-label="Panel Kontrol Studio">
             <button
               type="button"
               role="tab"
@@ -474,7 +481,7 @@ export const App: React.FC = () => {
               className="tab-btn"
               onClick={() => setActiveTab("editor")}
             >
-              <Sliders size={14} /> Editor 3D
+              <SlidersHorizontal size={13} /> Editor 3D
             </button>
             <button
               type="button"
@@ -483,7 +490,7 @@ export const App: React.FC = () => {
               className="tab-btn"
               onClick={() => setActiveTab("voice")}
             >
-              <Mic size={14} /> Voice AI
+              <Mic size={13} /> Voice AI
             </button>
             <button
               type="button"
@@ -492,7 +499,7 @@ export const App: React.FC = () => {
               className="tab-btn"
               onClick={() => setActiveTab("render")}
             >
-              <Film size={14} /> Render
+              <Film size={13} /> Render
             </button>
             <button
               type="button"
@@ -501,19 +508,18 @@ export const App: React.FC = () => {
               className="tab-btn"
               onClick={() => setActiveTab("youtube")}
             >
-              <Youtube size={14} /> YouTube
+              <Youtube size={13} /> YouTube
             </button>
           </div>
 
           <div className="inspector-body">
-            {/* Live Background Job Progress Card */}
             {activeJob && (
-              <div className="card">
-                <div className="card-header">
-                  <span className="card-title">
-                    <Sparkles size={14} /> {activeJob.label}
+              <section className="panel-section">
+                <div className="section-head">
+                  <span className="section-title">
+                    <Radio size={13} /> {activeJob.label}
                   </span>
-                  <span className="meta-pill">
+                  <span className="readout">
                     {activeJob.status === "running"
                       ? `${activeJob.progress}%`
                       : activeJob.status === "done"
@@ -527,16 +533,16 @@ export const App: React.FC = () => {
                 {activeJob.logs.length > 0 && (
                   <div className="log-box">{activeJob.logs.slice(-10).join("\n")}</div>
                 )}
-              </div>
+              </section>
             )}
 
             {/* TAB 1: EDITOR 3D */}
             {activeTab === "editor" && (
               <>
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">
-                      <Layers size={14} /> Pencahayaan & Overlay Preview
+                <section className="panel-section">
+                  <div className="section-head">
+                    <span className="section-title">
+                      <Layers size={13} /> Kamera & Overlay
                     </span>
                     <button type="button" className="btn btn-sm" onClick={handleResetBoard}>
                       <RotateCcw size={12} /> Reset
@@ -546,7 +552,7 @@ export const App: React.FC = () => {
                   <div className="field">
                     <div className="row-between">
                       <label htmlFor="exposure-range">Exposure Kamera 3D</label>
-                      <span className="meta-pill">{exposure.toFixed(2)}</span>
+                      <span className="readout">{exposure.toFixed(2)} EV</span>
                     </div>
                     <input
                       id="exposure-range"
@@ -560,7 +566,7 @@ export const App: React.FC = () => {
                   </div>
 
                   <div className="field">
-                    <label htmlFor="sub-preview">Live Subtitle Preview (Overlay)</label>
+                    <label htmlFor="sub-preview">Live Subtitle Preview</label>
                     <input
                       id="sub-preview"
                       className="input"
@@ -581,7 +587,7 @@ export const App: React.FC = () => {
                   </div>
 
                   <div className="switch-row">
-                    <label htmlFor="wm-toggle">Tampilkan Watermark Bawah</label>
+                    <label htmlFor="wm-toggle">Watermark Bawah</label>
                     <input
                       id="wm-toggle"
                       type="checkbox"
@@ -601,13 +607,13 @@ export const App: React.FC = () => {
                       />
                     </div>
                   )}
-                </div>
+                </section>
 
                 {episode.supportsBoardEditor && currentBoard ? (
-                  <div className="card">
-                    <div className="card-header">
-                      <span className="card-title">
-                        <Sliders size={14} /> Papan Infografis 3D (Live)
+                  <section className="panel-section">
+                    <div className="section-head">
+                      <span className="section-title">
+                        <SlidersHorizontal size={13} /> Papan Infografis 3D
                       </span>
                       <div className="row">
                         <button
@@ -627,12 +633,13 @@ export const App: React.FC = () => {
                     </div>
 
                     <p className="hint">
-                      Ketik teks di bawah — tekstur kayu papan 3D di dalam scene langsung berubah secara real-time.
+                      Perubahan teks langsung memperbarui tekstur papan kayu di dalam scene 3D secara real-time.
                     </p>
 
                     <div className="field">
-                      <label>Judul Papan 3D</label>
+                      <label htmlFor="board-title">Judul Papan 3D</label>
                       <input
+                        id="board-title"
                         className="input"
                         value={currentBoard.title}
                         onChange={(e) => updateBoardField("title", e.target.value)}
@@ -640,8 +647,9 @@ export const App: React.FC = () => {
                     </div>
 
                     <div className="field">
-                      <label>Subjudul</label>
+                      <label htmlFor="board-subtitle">Subjudul</label>
                       <input
+                        id="board-subtitle"
                         className="input"
                         value={currentBoard.subtitle}
                         onChange={(e) => updateBoardField("subtitle", e.target.value)}
@@ -650,9 +658,10 @@ export const App: React.FC = () => {
 
                     <div className="grid-2">
                       <div className="field">
-                        <span className="col-badge-left">KOLOM KIRI (MERAH)</span>
+                        <span className="col-label-left">KOLOM KIRI</span>
                         <input
                           className="input"
+                          aria-label="Header kolom kiri"
                           value={currentBoard.leftHeader}
                           onChange={(e) => updateBoardField("leftHeader", e.target.value)}
                         />
@@ -660,21 +669,24 @@ export const App: React.FC = () => {
                           <input
                             key={i}
                             className="input"
+                            aria-label={`Poin kiri ${i + 1}`}
                             value={it}
                             onChange={(e) => updateBoardItem("leftItems", i, e.target.value)}
                           />
                         ))}
                         <input
                           className="input"
+                          aria-label="Kesimpulan kiri"
                           value={currentBoard.leftFooter}
                           onChange={(e) => updateBoardField("leftFooter", e.target.value)}
                         />
                       </div>
 
                       <div className="field">
-                        <span className="col-badge-right">KOLOM KANAN (HIJAU)</span>
+                        <span className="col-label-right">KOLOM KANAN</span>
                         <input
                           className="input"
+                          aria-label="Header kolom kanan"
                           value={currentBoard.rightHeader}
                           onChange={(e) => updateBoardField("rightHeader", e.target.value)}
                         />
@@ -682,63 +694,66 @@ export const App: React.FC = () => {
                           <input
                             key={i}
                             className="input"
+                            aria-label={`Poin kanan ${i + 1}`}
                             value={it}
                             onChange={(e) => updateBoardItem("rightItems", i, e.target.value)}
                           />
                         ))}
                         <input
                           className="input"
+                          aria-label="Kesimpulan kanan"
                           value={currentBoard.rightFooter}
                           onChange={(e) => updateBoardField("rightFooter", e.target.value)}
                         />
                       </div>
                     </div>
-                  </div>
+                  </section>
                 ) : (
-                  <div className="card">
-                    <span className="card-title">Info Episode</span>
+                  <section className="panel-section">
+                    <span className="section-title">Catatan Episode</span>
                     <p className="hint">
-                      Editor papan infografis 3D live saat ini aktif di <strong>Mina Padi Ikan Mas</strong> dan{" "}
-                      <strong>Sawah Padi-Bebek (Aigamo)</strong>. Kamu tetap bisa preview, generate voiceover, dan
-                      render episode ini di tab sebelah.
+                      Editor papan infografis 3D aktif di <strong>Mina Padi Ikan Mas</strong> dan{" "}
+                      <strong>Sawah Padi-Bebek (Aigamo)</strong>. Preview, voiceover AI, dan render MP4 tetap tersedia
+                      penuh untuk episode ini.
                     </p>
-                  </div>
+                  </section>
                 )}
               </>
             )}
 
-            {/* TAB 2: VOICE AI STUDIO */}
+            {/* TAB 2: VOICE AI */}
             {activeTab === "voice" && (
               <>
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">
-                      <Mic size={14} /> Qwen3-TTS MLX (Gratis & Lokal)
+                <section className="panel-section">
+                  <div className="section-head">
+                    <span className="section-title">
+                      <Mic size={13} /> Qwen3-TTS MLX
                     </span>
-                    <span className={`cap-badge ${health?.capabilities.mlxTts ? "ok" : ""}`}>
-                      {health?.capabilities.mlxTts ? "GPU Siap" : "Perlu mlx-audio"}
+                    <span className="led-item">
+                      <span className={`led-dot ${health?.capabilities.mlxTts ? "on" : ""}`} />
+                      {health?.capabilities.mlxTts ? "GPU SIAP" : "OFFLINE"}
                     </span>
                   </div>
 
-                  <div className="grid-2">
+                  <div className="segmented" role="group" aria-label="Mode Voice TTS">
                     <button
                       type="button"
-                      className={`btn btn-sm ${voiceMode === "design" ? "btn-primary" : ""}`}
+                      className={`seg-btn ${voiceMode === "design" ? "active" : ""}`}
                       onClick={() => setVoiceMode("design")}
                     >
-                      VoiceDesign 1.7B (Santai)
+                      VoiceDesign 1.7B
                     </button>
                     <button
                       type="button"
-                      className={`btn btn-sm ${voiceMode === "clone" ? "btn-primary" : ""}`}
+                      className={`seg-btn ${voiceMode === "clone" ? "active" : ""}`}
                       onClick={() => setVoiceMode("clone")}
                     >
-                      Voice Cloning (Base)
+                      Voice Cloning
                     </button>
                   </div>
 
                   <div className="field">
-                    <label htmlFor="voice-script">Naskah Bahasa Indonesia (Gaya Ngobrol)</label>
+                    <label htmlFor="voice-script">Naskah Bahasa Indonesia</label>
                     <textarea
                       id="voice-script"
                       className="textarea"
@@ -749,11 +764,11 @@ export const App: React.FC = () => {
 
                   {voiceMode === "design" && (
                     <div className="field">
-                      <label htmlFor="voice-instruct">Arahan Intonasi & Karakter Suara</label>
+                      <label htmlFor="voice-instruct">Arahan Intonasi & Karakter</label>
                       <textarea
                         id="voice-instruct"
                         className="textarea"
-                        style={{ minHeight: 64 }}
+                        style={{ minHeight: 68 }}
                         value={voiceInstruct}
                         onChange={(e) => setVoiceInstruct(e.target.value)}
                       />
@@ -762,8 +777,8 @@ export const App: React.FC = () => {
 
                   <div className="field">
                     <div className="row-between">
-                      <label htmlFor="voice-temp">Ekspresi / Temperature</label>
-                      <span className="meta-pill">{voiceTemp.toFixed(2)}</span>
+                      <label htmlFor="voice-temp">Temperature Intonasi</label>
+                      <span className="readout">{voiceTemp.toFixed(2)}</span>
                     </div>
                     <input
                       id="voice-temp"
@@ -782,28 +797,28 @@ export const App: React.FC = () => {
                     disabled={activeJob?.status === "running"}
                     onClick={handleGenerateVoice}
                   >
-                    <Sparkles size={15} /> Generate Voiceover WAV
+                    <Mic size={14} /> Generate Voiceover WAV
                   </button>
-                </div>
+                </section>
 
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">
-                      <Volume2 size={14} /> Hasil Voiceover ({voices.length})
+                <section className="panel-section">
+                  <div className="section-head">
+                    <span className="section-title">
+                      <Volume2 size={13} /> Takes Tersimpan ({voices.length})
                     </span>
-                    <button type="button" className="btn btn-sm" onClick={refreshLists}>
+                    <button type="button" className="btn btn-sm" onClick={refreshLists} aria-label="Segarkan daftar suara">
                       <RefreshCw size={12} />
                     </button>
                   </div>
 
                   {voices.length === 0 ? (
-                    <p className="hint">Belum ada voiceover yang di-generate dari studio.</p>
+                    <p className="hint">Belum ada file voiceover di out/studio_voices/.</p>
                   ) : (
                     voices.map((v) => (
-                      <div key={v.name} className="media-item">
+                      <div key={v.name} className="list-row">
                         <div className="row-between">
                           <strong style={{ fontSize: 12 }}>{v.name}</strong>
-                          <span className="meta-pill">{v.sizeMB} MB</span>
+                          <span className="readout">{v.sizeMB} MB</span>
                         </div>
                         <audio controls src={v.url} />
                         <div className="row-between">
@@ -815,8 +830,8 @@ export const App: React.FC = () => {
                               showNotice("ok", `Dipilih untuk muxing render: ${v.name}`);
                             }}
                           >
-                            <CheckCircle2 size={12} />
-                            {selectedVoiceFile === v.name ? "Dipakai di Render" : "Pakai untuk Render"}
+                            <Check size={12} />
+                            {selectedVoiceFile === v.name ? "Aktif di Render" : "Pakai di Render"}
                           </button>
                           <a className="btn btn-sm" href={v.url} download={v.name}>
                             <Download size={12} /> Unduh
@@ -825,30 +840,30 @@ export const App: React.FC = () => {
                       </div>
                     ))
                   )}
-                </div>
+                </section>
               </>
             )}
 
             {/* TAB 3: RENDER MP4 */}
             {activeTab === "render" && (
               <>
-                <div className="card">
-                  <span className="card-title">
-                    <Film size={14} /> Pengaturan Render MP4 ({episode.id})
+                <section className="panel-section">
+                  <span className="section-title">
+                    <Film size={13} /> Konfigurasi Render ({episode.id})
                   </span>
 
                   <div className="grid-2">
                     <div className="field">
-                      <label htmlFor="crf-select">Kualitas Video (CRF)</label>
+                      <label htmlFor="crf-select">Kualitas (CRF)</label>
                       <select
                         id="crf-select"
                         className="select"
                         value={renderCrf}
                         onChange={(e) => setRenderCrf(parseInt(e.target.value, 10))}
                       >
-                        <option value={18}>18 — Ultra Tajam</option>
+                        <option value={18}>18 — Master Tajam</option>
                         <option value={20}>20 — Seimbang</option>
-                        <option value={23}>23 — Cepat & Ringan</option>
+                        <option value={23}>23 — Draft Cepat</option>
                       </select>
                     </div>
 
@@ -860,15 +875,15 @@ export const App: React.FC = () => {
                         value={renderConcurrency}
                         onChange={(e) => setRenderConcurrency(parseInt(e.target.value, 10))}
                       >
-                        <option value={1}>1 (Hemat RAM)</option>
-                        <option value={2}>2 (Rekomendasi)</option>
-                        <option value={3}>3 (Cepat)</option>
+                        <option value={1}>1 — Hemat RAM</option>
+                        <option value={2}>2 — Standar</option>
+                        <option value={3}>3 — Cepat</option>
                       </select>
                     </div>
                   </div>
 
                   <div className="field">
-                    <label htmlFor="frame-range">Rentang Frame Opsional (mis. 0-150 untuk tes cepat 5 detik)</label>
+                    <label htmlFor="frame-range">Rentang Frame Opsional (mis. 0-150 untuk tes 5 detik)</label>
                     <input
                       id="frame-range"
                       className="input"
@@ -879,7 +894,7 @@ export const App: React.FC = () => {
                   </div>
 
                   <div className="field">
-                    <label htmlFor="mux-voice">Gabungkan Voiceover (Opsional)</label>
+                    <label htmlFor="mux-voice">Track Audio Voiceover</label>
                     <select
                       id="mux-voice"
                       className="select"
@@ -901,58 +916,58 @@ export const App: React.FC = () => {
                     disabled={activeJob?.status === "running"}
                     onClick={handleStartRender}
                   >
-                    <Film size={15} /> Mulai Render {episode.id}
+                    <Film size={14} /> Render {episode.id} ke MP4
                   </button>
-                </div>
+                </section>
 
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">Video Hasil Render ({renders.length})</span>
-                    <button type="button" className="btn btn-sm" onClick={refreshLists}>
+                <section className="panel-section">
+                  <div className="section-head">
+                    <span className="section-title">Output Render ({renders.length})</span>
+                    <button type="button" className="btn btn-sm" onClick={refreshLists} aria-label="Segarkan daftar render">
                       <RefreshCw size={12} />
                     </button>
                   </div>
 
                   {renders.length === 0 ? (
-                    <p className="hint">Belum ada video render di out/studio_renders/.</p>
+                    <p className="hint">Belum ada video di out/studio_renders/.</p>
                   ) : (
                     renders.map((r) => (
-                      <div key={r.name} className="media-item">
+                      <div key={r.name} className="list-row">
                         <div className="row-between">
                           <strong style={{ fontSize: 12 }}>{r.name}</strong>
-                          <span className="meta-pill">{r.sizeMB} MB</span>
+                          <span className="readout">{r.sizeMB} MB</span>
                         </div>
-                        <video controls src={r.url} style={{ maxHeight: 260 }} />
+                        <video controls src={r.url} style={{ maxHeight: 250 }} />
                         <div className="row-between">
                           <button
                             type="button"
-                            className="btn btn-amber btn-sm"
+                            className="btn btn-secondary-accent btn-sm"
                             onClick={() => {
                               setEnqueueFile(r.name);
                               setEnqueueTitle(episode.name);
                               setActiveTab("youtube");
                             }}
                           >
-                            <Send size={12} /> Kirim ke YouTube
+                            <Send size={12} /> Kirim ke Antrean YT
                           </button>
                           <a className="btn btn-sm" href={r.url} download={r.name}>
-                            <Download size={12} /> Unduh MP4
+                            <Download size={12} /> Unduh
                           </a>
                         </div>
                       </div>
                     ))
                   )}
-                </div>
+                </section>
               </>
             )}
 
             {/* TAB 4: YOUTUBE SCHEDULER */}
             {activeTab === "youtube" && (
               <>
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">
-                      <Youtube size={14} /> Koneksi YouTube Data API v3
+                <section className="panel-section">
+                  <div className="section-head">
+                    <span className="section-title">
+                      <Youtube size={13} /> YouTube Data API v3
                     </span>
                     <button
                       type="button"
@@ -960,12 +975,16 @@ export const App: React.FC = () => {
                       disabled={activeJob?.status === "running"}
                       onClick={() => handleYoutubeAction("/api/youtube/verify")}
                     >
-                      <CheckCircle2 size={12} /> Verify Token
+                      <Check size={12} /> Verify Token
                     </button>
                   </div>
+
                   <p className="hint">
-                    Folder antrean aktif: <code>{queueData?.queueDir || "-"}</code>
+                    Folder antrean: <code>{queueData?.queueDir || "-"}</code>
                   </p>
+
+                  {queueData?.warning && <div className="notice-strip warn">{queueData.warning}</div>}
+
                   <div className="grid-2">
                     <div className="field">
                       <label htmlFor="yt-hour">Jam Tayang (WIB)</label>
@@ -992,6 +1011,7 @@ export const App: React.FC = () => {
                       />
                     </div>
                   </div>
+
                   <div className="grid-2">
                     <button
                       type="button"
@@ -1022,13 +1042,14 @@ export const App: React.FC = () => {
                       <UploadCloud size={13} /> Jadwalkan Semua
                     </button>
                   </div>
-                </div>
+                </section>
 
-                <div className="card">
-                  <span className="card-title">Tambah Video Render ke Antrean</span>
+                <section className="panel-section">
+                  <span className="section-title">Tambah Video ke Antrean</span>
                   <div className="field">
-                    <label>Pilih File Render MP4</label>
+                    <label htmlFor="yt-file">File Render MP4</label>
                     <select
+                      id="yt-file"
                       className="select"
                       value={enqueueFile}
                       onChange={(e) => setEnqueueFile(e.target.value)}
@@ -1042,8 +1063,9 @@ export const App: React.FC = () => {
                     </select>
                   </div>
                   <div className="field">
-                    <label>Judul YouTube Shorts</label>
+                    <label htmlFor="yt-title">Judul YouTube Shorts</label>
                     <input
+                      id="yt-title"
                       className="input"
                       placeholder="Maks. 100 karakter, tanpa emoji"
                       value={enqueueTitle}
@@ -1051,8 +1073,9 @@ export const App: React.FC = () => {
                     />
                   </div>
                   <div className="field">
-                    <label>Deskripsi & Hashtags</label>
+                    <label htmlFor="yt-desc">Deskripsi & Hashtags</label>
                     <textarea
+                      id="yt-desc"
                       className="textarea"
                       style={{ minHeight: 64 }}
                       placeholder="Deskripsi singkat + #shorts #nalatoon #faktaunik"
@@ -1060,15 +1083,15 @@ export const App: React.FC = () => {
                       onChange={(e) => setEnqueueDesc(e.target.value)}
                     />
                   </div>
-                  <button type="button" className="btn btn-amber btn-full" onClick={handleEnqueueRender}>
-                    <Send size={14} /> Masukkan ke Antrean Upload
+                  <button type="button" className="btn btn-secondary-accent btn-full" onClick={handleEnqueueRender}>
+                    <Send size={13} /> Masukkan ke Antrean Upload
                   </button>
-                </div>
+                </section>
 
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">Antrean Siap Upload ({queueData?.items.length ?? 0})</span>
-                    <button type="button" className="btn btn-sm" onClick={refreshLists}>
+                <section className="panel-section">
+                  <div className="section-head">
+                    <span className="section-title">Antrean Aktif ({queueData?.items.length ?? 0})</span>
+                    <button type="button" className="btn btn-sm" onClick={refreshLists} aria-label="Segarkan antrean">
                       <RefreshCw size={12} />
                     </button>
                   </div>
@@ -1076,41 +1099,36 @@ export const App: React.FC = () => {
                     <p className="hint">Antrean sedang kosong.</p>
                   ) : (
                     queueData.items.map((it) => (
-                      <div key={it.name} className="media-item">
+                      <div key={it.name} className="list-row">
                         <div className="row-between">
                           <strong style={{ fontSize: 12 }}>{it.title}</strong>
-                          <span className="meta-pill">{it.sizeMB} MB</span>
+                          <span className="readout">{it.sizeMB} MB</span>
                         </div>
                         <span className="hint">
-                          Folder: {it.name} · {it.hasCaption ? "caption.txt siap" : "tanpa caption.txt"}
+                          {it.name} · {it.hasCaption ? "caption.txt siap" : "tanpa caption.txt"}
                         </span>
                       </div>
                     ))
                   )}
-                </div>
+                </section>
 
                 {queueData && queueData.history.length > 0 && (
-                  <div className="card">
-                    <span className="card-title">Riwayat Terjadwal / Terbit</span>
+                  <section className="panel-section">
+                    <span className="section-title">Riwayat Terjadwal / Terbit</span>
                     {queueData.history.map((h, i) => (
-                      <div key={i} className="media-item">
+                      <div key={i} className="list-row">
                         <strong style={{ fontSize: 12 }}>{h.title || "Short"}</strong>
                         <span className="hint">
                           {h.publish_at ? `Jadwal: ${h.publish_at}` : `Status: ${h.privacy || "public"}`}
                         </span>
                         {h.url && (
-                          <a
-                            href={h.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ color: "#34d399", fontSize: 12 }}
-                          >
+                          <a className="yt-link" href={h.url} target="_blank" rel="noreferrer">
                             {h.url}
                           </a>
                         )}
                       </div>
                     ))}
-                  </div>
+                  </section>
                 )}
               </>
             )}

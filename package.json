@@ -6,6 +6,7 @@
   "scripts": {
     "ui": "node web-studio/start.mjs",
     "ui:build": "vite build --config web-studio/vite.config.ts",
+    "lint:slop": "node scripts/lint-antislop.mjs",
     "studio": "remotion studio",
     "typecheck": "tsc --noEmit && tsc -p web-studio/tsconfig.json --noEmit",
     "render:padibebek": "zsh scripts/render/render_short.sh PadiBebekShort",
